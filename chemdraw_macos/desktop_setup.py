@@ -256,6 +256,8 @@ class SetupSession:
                 self.settings['installed_app'] = result.get('installed_app')
                 if result.get('installed_runtime'):  # Windows per-user installation
                     self.settings['installed_runtime'] = result['installed_runtime']
+                    self.settings['runtime_command'] = result.get('command')
+                    self.settings['claude_code'] = result.get('claude_code')
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self.path.is_symlink():
                 raise ValueError('Refusing symbolic link for setup settings')

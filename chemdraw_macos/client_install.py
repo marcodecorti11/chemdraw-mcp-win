@@ -78,14 +78,15 @@ def _atomic(path, data, mode=0o600):
 
 
 def connect_clients(clients, runtime, *, home=None, args=None,
-                    claude_config=None, codex_config=None, claude_manifest=None):
+                    claude_config=None, codex_config=None, claude_manifest=None, gemini_config=None):
     """Plan every selected config first; preserve other servers and original bytes.
 
     Config locations default to the macOS ones; the Windows installer passes its own.
+    'gemini' is Gemini CLI's user settings (~/.gemini/settings.json, documented mcpServers format).
     """
     if not isinstance(clients, list) or not clients:
         raise ValueError('Select at least one assistant')
-    if any(c not in ('claude', 'codex', 'bundle') for c in clients) or len(set(clients)) != len(clients):
+    if any(c not in ('claude', 'codex', 'gemini', 'bundle') for c in clients) or len(set(clients)) != len(clients):
         raise ValueError('Unsupported assistant selection')
     home = Path(home) if home is not None else Path.home()
     command = str(Path(runtime).absolute())
@@ -107,24 +108,31 @@ def connect_clients(clients, runtime, *, home=None, args=None,
                 raise ValueError('Existing Claude extension metadata could not be checked')
         if client == 'claude':
             path = Path(claude_config) if claude_config is not None else home/'Library/Application Support/Claude/claude_desktop_config.json'
+        elif client == 'gemini':
+            path = Path(gemini_config) if gemini_config is not None else home/'.gemini/settings.json'
         else:
             path = Path(codex_config) if codex_config is not None else home/'.codex/config.toml'
+        json_client = client in ('claude', 'gemini')
         _regular(path)
         before = path.read_bytes() if path.exists() else None
         text = (before or b'').decode('utf-8')
         try:
-            data = (json.loads(text or '{}') if client == 'claude' else tomllib.loads(text))
-            key = 'mcpServers' if client == 'claude' else 'mcp_servers'
+            data = (json.loads(text or '{}') if json_client else tomllib.loads(text))
+            if not isinstance(data, dict):
+                raise ValueError('Settings must be an object')
+            key = 'mcpServers' if json_client else 'mcp_servers'
             servers = data.get(key, {})
             if not isinstance(servers, dict):
                 raise ValueError('Server settings must be an object')
-            wanted = entry if client == 'claude' else {**entry, 'tool_timeout_sec': 300}
+            # Long native jobs: Codex and Gemini CLI time out tool calls well below a large table's duration.
+            wanted = (entry if client == 'claude' else {**entry, 'timeout': 300000} if client == 'gemini'
+                      else {**entry, 'tool_timeout_sec': 300})
             existing = servers.get(SERVER_NAME)
             if existing == wanted:
                 continue
             if existing is not None:
                 raise ValueError(f'{SERVER_NAME} is already configured differently in {client}. No settings changed.')
-            if client == 'claude':
+            if json_client:
                 data.setdefault(key, {})[SERVER_NAME] = wanted
                 after = json.dumps(data, indent=2)+'\n'
             else:

@@ -96,3 +96,60 @@ def test_animation_runs_unless_explicitly_reduced():
     assert gui.reduced_motion({}) is False
     assert gui.reduced_motion({'CHEMDRAW_MCP_REDUCE_MOTION': '0'}) is False
     assert gui.reduced_motion({'CHEMDRAW_MCP_REDUCE_MOTION': '1'}) is True
+
+
+def _window(tmp_path, session):
+    tk = pytest.importorskip('tkinter')
+    try:
+        app = gui.SetupWindow(session, logs=tmp_path / 'Logs', detect_app=lambda: None)
+    except tk.TclError as exc:
+        pytest.skip(f'No interactive desktop for Tk: {exc}')
+    app.root.withdraw()
+    return app
+
+
+def _texts(widget):
+    found = []
+    for child in widget.winfo_children():
+        try:
+            found.append(str(child.cget('text')))
+        except Exception:
+            pass
+        found += _texts(child)
+    return found
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Tk window on the Windows desktop')
+def test_finish_sends_every_ticked_assistant_including_terminal_clis(tmp_path):
+    app = _window(tmp_path, FakeSession())
+    try:
+        labels = ' | '.join(_texts(app.content))
+        for name in ('Claude Desktop', 'Claude Code', 'Codex', 'Gemini CLI'):
+            assert name in labels
+        for variable in (app.claude, app.claude_code, app.codex, app.gemini):
+            variable.set(True)
+        sent = []
+        app.run_action = sent.append
+        app.flow.step = 2
+        app.primary_action()
+        assert sent == [{'action': 'finish', 'clients': ['claude', 'claude-code', 'codex', 'gemini']}]
+    finally:
+        app.root.destroy()
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Tk window on the Windows desktop')
+def test_done_screen_shows_manual_claude_code_command_and_any_client_command(tmp_path):
+    session = FakeSession()
+    runtime = r'C:\Users\u\AppData\Local\ChemDraw MCP\current\chemdraw-runtime.exe'
+    session.settings = {'installed_runtime': r'C:\x', 'runtime_command': runtime,
+                        'claude_code': {'status': 'manual', 'message': 'Claude Code was not found on PATH.',
+                                        'command': 'claude mcp add --scope user glecko_chemdraw -- "x" --desktop-serve'}}
+    app = _window(tmp_path, session)
+    try:
+        app.flow.finished = True
+        app.refresh()
+        text = ' | '.join(_texts(app.content))
+        assert 'claude mcp add --scope user glecko_chemdraw -- "x" --desktop-serve' in text
+        assert f'"{runtime}" --desktop-serve' in text  # stdio command for any other MCP client
+    finally:
+        app.root.destroy()

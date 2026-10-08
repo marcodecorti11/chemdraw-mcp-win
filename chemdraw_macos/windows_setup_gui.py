@@ -18,6 +18,7 @@ from pathlib import Path
 import platform
 import queue
 import re
+import shutil
 import sys
 import threading
 import time
@@ -192,7 +193,9 @@ class SetupWindow:
         self.app = (Path(selected), '') if selected else detect_app()
         appdata = Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming'))
         self.claude = tk.BooleanVar(value=(appdata / 'Claude').is_dir())
+        self.claude_code = tk.BooleanVar(value=bool(shutil.which('claude')))
         self.codex = tk.BooleanVar(value=(Path.home() / '.codex').is_dir())
+        self.gemini = tk.BooleanVar(value=bool(shutil.which('gemini')) or (Path.home() / '.gemini').is_dir())
         self.build()
         self.refresh()
         self.root.protocol('WM_DELETE_WINDOW', self.close)
@@ -345,7 +348,18 @@ class SetupWindow:
             self.line(box, 'Installed for this Windows account; no administrator rights were used.').pack(fill='x', **pad)
             if settings.get('installed_runtime'):
                 self.line(box, settings['installed_runtime'], color('gold'), 'small').pack(fill='x', **pad)
-            self.line(box, 'Restart Claude Desktop or Codex to load ChemDraw MCP.').pack(fill='x', **pad)
+            self.line(box, 'Restart the connected apps; in a terminal assistant, start a new session.').pack(fill='x', **pad)
+            claude_code = settings.get('claude_code') or {}
+            if claude_code.get('status') in ('added', 'unchanged'):
+                self.line(box, 'Claude Code is connected.', color('lavender')).pack(fill='x', **pad)
+            elif claude_code.get('command'):
+                self.line(box, claude_code.get('message', 'Connect Claude Code with:'), color('white', .7), 'small').pack(fill='x', **pad)
+                self.command_line(box, claude_code['command'])
+            runtime = settings.get('runtime_command')
+            if runtime:
+                self.line(box, 'Any other MCP client: add a local (stdio) server with this command:',
+                          color('white', .7), 'small').pack(fill='x', **pad)
+                self.command_line(box, f'"{runtime}" --desktop-serve')
             self.line(box, 'In a new terminal, run: chemdraw-mac doctor', color('lavender')).pack(fill='x', **pad)
             self.draw_primary('Close')
         elif self.flow.step == 0:
@@ -354,9 +368,9 @@ class SetupWindow:
             self.link(box, 'Choose ChemDraw.exe…', self.choose_app).pack(anchor='w', padx=self.px(12))
             self.tracked(box, 'CONNECT TO', 'mono', color('lavender'), self.px(2)).pack(
                 anchor='w', padx=self.px(12), pady=(self.px(10), self.px(4)))
-            for text, variable in (('Claude Desktop', self.claude), ('Codex', self.codex)):
+            for _, text, variable in self.choices():
                 self.checkbox(box, text, variable).pack(anchor='w', padx=self.px(12), pady=self.px(2))
-            self.line(box, 'Choose one or both, or none for terminal use only. One shared installation.',
+            self.line(box, 'Choose any, or none for the chemdraw-mac terminal command only. One shared installation.',
                       color('white', .55), 'small').pack(fill='x', padx=self.px(12), pady=(0, self.px(8)))
             self.draw_primary('Check software')
         elif self.flow.step == 1:
@@ -367,7 +381,7 @@ class SetupWindow:
                       color('white', .55), 'small').pack(fill='x', padx=self.px(12), pady=(self.px(4), self.px(8)))
             self.draw_primary('Test connection')
         else:
-            chosen = [n for n, v in (('Claude Desktop', self.claude), ('Codex', self.codex)) if v.get()]
+            chosen = [text for _, text, variable in self.choices() if variable.get()]
             self.line(box, 'Connect: ' + (', '.join(chosen) if chosen else 'terminal only')).pack(fill='x', **pad)
             self.line(box, 'Existing assistant settings are kept and backed up. Your ChemDraw stays as it is.',
                       color('white', .55), 'small').pack(fill='x', padx=self.px(12), pady=(self.px(4), self.px(8)))
@@ -394,8 +408,23 @@ class SetupWindow:
             return self.run_action({'action': 'check'})
         if self.flow.step == 1:
             return self.run_action({'action': 'test'})
-        clients = [k for k, v in (('claude', self.claude), ('codex', self.codex)) if v.get()]
+        clients = [key for key, _, variable in self.choices() if variable.get()]
         return self.run_action({'action': 'finish', 'clients': clients})
+
+    def choices(self):
+        return (('claude', 'Claude Desktop', self.claude), ('claude-code', 'Claude Code (terminal)', self.claude_code),
+                ('codex', 'Codex (app and CLI)', self.codex), ('gemini', 'Gemini CLI', self.gemini))
+
+    def command_line(self, box, command):
+        """A command the user may need to run or paste elsewhere, with a copy link."""
+        row = self.tk.Frame(box, bg=box['bg'])
+        row.pack(fill='x', padx=self.px(12), pady=(self.px(2), 0))
+        self.line(row, command, color('gold'), 'small').pack(side='left', fill='x', expand=True)
+
+        def copy():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(command)
+        self.link(row, 'Copy', copy).pack(side='left', padx=(self.px(8), 0))
 
     def choose_app(self):
         from tkinter import filedialog

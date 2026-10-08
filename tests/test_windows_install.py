@@ -109,3 +109,89 @@ def test_unrecognized_runtime_folder_is_refused(env, tmp_path):
     bogus.mkdir()
     with pytest.raises(ValueError, match='ChemDraw MCP runtime'):
         wi.install_and_connect(bogus, [], paths=paths)
+
+
+def test_gemini_cli_entry_is_added_once_and_other_settings_are_kept(env, tmp_path):
+    wi, paths, home, store = env
+    assert paths.gemini_config == home / '.gemini/settings.json'
+    paths.gemini_config.parent.mkdir(parents=True)
+    paths.gemini_config.write_text(json.dumps({'ui': {'theme': 'dark'}, 'mcpServers': {'other': {'command': 'x'}}}),
+                                   encoding='utf-8')
+    first = wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.1'), ['gemini'], paths=paths)
+    data = json.loads(paths.gemini_config.read_text(encoding='utf-8'))
+    assert data['ui'] == {'theme': 'dark'} and data['mcpServers']['other'] == {'command': 'x'}
+    assert data['mcpServers']['glecko_chemdraw'] == {'command': str(paths.runtime), 'args': ['--desktop-serve'],
+                                                     'timeout': 300000}
+    assert 'gemini' in first['clients'] and len(first['backups']) == 1
+    before = paths.gemini_config.read_bytes()
+    second = wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.2', 'b'), ['gemini'], paths=paths)
+    assert paths.gemini_config.read_bytes() == before and second['backups'] == []
+
+
+def fake_claude(paths, calls, *, accept=True):
+    def run(argv):
+        calls.append(argv)
+        if accept:
+            data = json.loads(paths.claude_code_config.read_text(encoding='utf-8')) if paths.claude_code_config.exists() else {}
+            data.setdefault('mcpServers', {})[argv[5]] = {'type': 'stdio', 'command': argv[7], 'args': argv[8:], 'env': {}}
+            paths.claude_code_config.parent.mkdir(parents=True, exist_ok=True)
+            paths.claude_code_config.write_text(json.dumps(data), encoding='utf-8')
+            return 0, 'Added'
+        return 1, 'refused'
+    return run
+
+
+def test_claude_code_is_registered_through_its_own_cli(env, tmp_path, monkeypatch):
+    wi, paths, home, store = env
+    calls = []
+    monkeypatch.setattr(wi, '_find_claude_cli', lambda: r'C:\npm\claude.cmd')
+    monkeypatch.setattr(wi, '_run_claude', fake_claude(paths, calls))
+    result = wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.1'), ['claude-code'], paths=paths)
+    assert calls == [[r'C:\npm\claude.cmd', 'mcp', 'add', '--scope', 'user', 'glecko_chemdraw', '--',
+                      str(paths.runtime), '--desktop-serve']]
+    assert result['claude_code']['status'] == 'added' and 'claude-code' in result['clients']
+    # An identical entry is left alone on update: no second CLI call.
+    again = wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.2', 'b'), ['claude-code'], paths=paths)
+    assert len(calls) == 1 and again['claude_code']['status'] == 'unchanged'
+
+
+def test_claude_code_entry_configured_differently_is_not_overwritten(env, tmp_path, monkeypatch):
+    wi, paths, home, store = env
+    paths.claude_code_config.parent.mkdir(parents=True)
+    paths.claude_code_config.write_text(json.dumps({'mcpServers': {'glecko_chemdraw': {'command': 'other.exe', 'args': []}}}),
+                                        encoding='utf-8')
+    calls = []
+    monkeypatch.setattr(wi, '_find_claude_cli', lambda: r'C:\npm\claude.cmd')
+    monkeypatch.setattr(wi, '_run_claude', fake_claude(paths, calls))
+    result = wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.1'), ['claude-code'], paths=paths)
+    assert calls == [] and result['claude_code']['status'] == 'conflict'
+    assert 'claude-code' not in result['clients']
+    assert json.loads(paths.claude_code_config.read_text(encoding='utf-8'))['mcpServers']['glecko_chemdraw']['command'] == 'other.exe'
+
+
+def test_missing_claude_cli_gives_the_exact_manual_command(env, tmp_path, monkeypatch):
+    wi, paths, home, store = env
+    monkeypatch.setattr(wi, '_find_claude_cli', lambda: None)
+    monkeypatch.setattr(wi, '_run_claude', lambda argv: pytest.fail('no CLI must not be run'))
+    result = wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.1'), ['claude-code'], paths=paths)
+    assert result['claude_code']['status'] == 'manual'
+    assert result['claude_code']['command'] == f'claude mcp add --scope user glecko_chemdraw -- "{paths.runtime}" --desktop-serve'
+    assert paths.current.is_junction()  # the installation itself still completed
+
+
+def test_claude_cli_failure_is_reported_without_undoing_the_installation(env, tmp_path, monkeypatch):
+    wi, paths, home, store = env
+    calls = []
+    monkeypatch.setattr(wi, '_find_claude_cli', lambda: r'C:\npm\claude.cmd')
+    monkeypatch.setattr(wi, '_run_claude', fake_claude(paths, calls, accept=False))
+    result = wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.1'), ['claude', 'claude-code'], paths=paths)
+    assert len(calls) == 1 and result['claude_code']['status'] == 'failed'  # never retried
+    assert 'manual command' not in result['claude_code'] or result['claude_code']['command']
+    assert result['clients'] == ['claude'] and paths.current.is_junction()
+
+
+def test_unknown_assistant_is_refused_before_any_change(env, tmp_path):
+    wi, paths, home, store = env
+    with pytest.raises(ValueError):
+        wi.install_and_connect(runtime(tmp_path, '0.10.0rc22-win.1'), ['claude', 'cursor'], paths=paths)
+    assert not paths.support.exists()

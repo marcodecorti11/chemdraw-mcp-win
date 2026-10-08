@@ -15,7 +15,7 @@ import re
 import shutil
 import tempfile
 
-from .client_install import _atomic, _regular, connect_clients
+from .client_install import SERVER_NAME, _atomic, _regular, connect_clients
 
 PRODUCT = 'chemdraw-mcp-windows'
 RUNTIME = 'chemdraw-runtime.exe'
@@ -40,6 +40,10 @@ class Paths:
         self.claude_config = roaming / 'Claude/claude_desktop_config.json'
         self.claude_manifest = roaming / 'Claude/Claude Extensions/local.mcpb.glenn-bojanov.chemdraw-macos/manifest.json'
         self.codex_config = profile / '.codex/config.toml'
+        self.gemini_config = profile / '.gemini/settings.json'
+        # Claude Code keeps user-scope MCP servers in .claude.json (CLAUDE_CONFIG_DIR when set).
+        claude_dir = os.environ.get('CLAUDE_CONFIG_DIR') if home is None else None
+        self.claude_code_config = Path(claude_dir or profile) / '.claude.json'
 
 
 def runtime_version(source):
@@ -139,8 +143,65 @@ def _launchers(paths):
             (paths.bin / 'chemdraw-mcp-macos.cmd', body(' --cli serve'))]
 
 
+CLIENTS = ('claude', 'codex', 'gemini', 'claude-code')
+
+
+def _find_claude_cli():
+    return shutil.which('claude')
+
+
+def _run_claude(argv):
+    import subprocess
+    done = subprocess.run(argv, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
+    return done.returncode, (done.stdout + done.stderr).strip()
+
+
+def _claude_code_entry(paths):
+    try:
+        data = json.loads(paths.claude_code_config.read_text(encoding='utf-8')) if paths.claude_code_config.exists() else {}
+    except ValueError:
+        return 'unreadable', None
+    servers = data.get('mcpServers', {}) if isinstance(data, dict) else None
+    if not isinstance(servers, dict):
+        return 'unreadable', None
+    return 'ok', servers.get(SERVER_NAME)
+
+
+def connect_claude_code(paths):
+    """Register the installed runtime with Claude Code through its own CLI (user scope).
+
+    Claude Code rewrites its config file while it runs, so the file is only read here; the write is
+    left to `claude mcp add`. One attempt, never retried; a failure leaves the installation in place.
+    """
+    runtime = str(paths.runtime)
+    manual = f'claude mcp add --scope user {SERVER_NAME} -- "{runtime}" --desktop-serve'
+    state, existing = _claude_code_entry(paths)
+    if state != 'ok':
+        return {'status': 'failed', 'message': 'Claude Code settings could not be read; nothing was changed.',
+                'command': manual}
+    if existing is not None:
+        if existing.get('command') == runtime and existing.get('args') == ['--desktop-serve']:
+            return {'status': 'unchanged'}
+        return {'status': 'conflict', 'message': f'{SERVER_NAME} is already configured differently in Claude Code; '
+                                                 'it was left unchanged.', 'command': manual}
+    cli = _find_claude_cli()
+    if not cli:
+        return {'status': 'manual', 'message': 'Claude Code was not found on PATH. Run this once in a terminal:',
+                'command': manual}
+    code, output = _run_claude([cli, 'mcp', 'add', '--scope', 'user', SERVER_NAME, '--', runtime, '--desktop-serve'])
+    state, existing = _claude_code_entry(paths)
+    if code == 0 and state == 'ok' and existing and existing.get('command') == runtime:
+        return {'status': 'added'}
+    return {'status': 'failed', 'message': 'Claude Code did not confirm the entry: ' + output[-300:],
+            'command': manual}
+
+
 def install_and_connect(source, clients, *, paths=None):
     paths = paths or Paths()
+    if (not isinstance(clients, list) or any(c not in CLIENTS for c in clients)
+            or len(set(clients)) != len(clients)):
+        raise ValueError('Unsupported assistant selection')
+    file_clients = [c for c in clients if c != 'claude-code']
     installed = install_runtime(source, paths)
     previous_target = _junction_target(paths.current, paths)
     previous_path = _read_user_path()
@@ -164,9 +225,10 @@ def install_and_connect(source, clients, *, paths=None):
             _write_user_path(wanted_path)
             path_changed = True
             _broadcast_environment_change()
-        result = connect_clients(clients, paths.runtime, args=['--desktop-serve'],
+        result = connect_clients(file_clients, paths.runtime, args=['--desktop-serve'],
                                  claude_config=paths.claude_config, codex_config=paths.codex_config,
-                                 claude_manifest=paths.claude_manifest) if clients else {
+                                 claude_manifest=paths.claude_manifest,
+                                 gemini_config=paths.gemini_config) if file_clients else {
             'clients': [], 'bundle_clients': [], 'backups': [], 'command': str(paths.runtime), 'args': ['--desktop-serve']}
     except Exception:
         for path, before, data in reversed(written):
@@ -184,5 +246,9 @@ def install_and_connect(source, clients, *, paths=None):
             else:
                 _set_junction(paths.current, previous_target)
         raise
+    if 'claude-code' in clients:
+        result = {**result, 'claude_code': connect_claude_code(paths)}
+        if result['claude_code']['status'] in ('added', 'unchanged'):
+            result['clients'] = [*result['clients'], 'claude-code']
     return {**result, 'installed_runtime': str(installed), 'current': str(paths.current),
             'terminal_command': str(paths.bin / 'chemdraw-mac.cmd'), 'user_path_updated': path_changed}
