@@ -62,7 +62,7 @@ for molecule in animation.molecules {
     assert(abs(layout.bounds.width-208) < 0.001 || abs(layout.bounds.height-121) < 0.001)
 }
 print("Three-page flow, finish-close action and all molecular ink bounds passed")
-''')
+''',encoding='utf-8',newline='')
     flags = []
     if overlay := os.environ.get('CHEMDRAW_BUILD_SWIFT_OVERLAY'):
         flags = ['-vfsoverlay', overlay, '-Xcc', '-ivfsoverlay', '-Xcc', overlay]
@@ -109,7 +109,7 @@ case .failure(let error): assert(!error.localizedDescription.isEmpty)
 for _ in 0..<100 { report.record(action: "test", status: "ready", details: [:]) }
 assert(report.events.count == 50)
 print("Diagnostics file roundtrip, failed-write result and bounded history passed")
-''')
+''',encoding='utf-8',newline='')
     flags = []
     if overlay := os.environ.get('CHEMDRAW_BUILD_SWIFT_OVERLAY'):
         flags = ['-vfsoverlay', overlay, '-Xcc', '-ivfsoverlay', '-Xcc', overlay]
@@ -120,7 +120,7 @@ print("Diagnostics file roundtrip, failed-write result and bounded history passe
 
 
 def test_save_panel_handles_results_and_offers_copy_fallback():
-    source = (ROOT/'packaging/Welcome.swift').read_text()
+    source = (ROOT/'packaging/Welcome.swift').read_text(encoding='utf-8')
     save = source.split('func saveDiagnostics()')[1].split('func close()')[0]
     assert 'allowedContentTypes = [.plainText]' in save
     assert 'DiagnosticExport.save(' in save
@@ -132,7 +132,7 @@ def test_save_panel_handles_results_and_offers_copy_fallback():
 
 
 def test_native_setup_autosaves_diagnostics_and_exposes_saved_report():
-    source = (ROOT/'packaging/Welcome.swift').read_text()
+    source = (ROOT/'packaging/Welcome.swift').read_text(encoding='utf-8')
     assert 'DiagnosticExport.autosave(' in source
     assert 'Button("Show saved report")' in source
     assert source.count('diagnostics.record(') == 1

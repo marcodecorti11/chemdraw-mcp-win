@@ -33,7 +33,7 @@ async def test_native_name_drawing_via_core_mcp(tmp_path,name,expected,stereo):
             try:
                 assert result['status']=='native_generated_review_required'
                 assert result['audit']['rdkit_used'] is False
-                mols=Chem.MolsFromCDXML(Path(result['artifacts']['cdxml']).read_text())
+                mols=Chem.MolsFromCDXML(Path(result['artifacts']['cdxml']).read_text(encoding='utf-8'))
                 assert len(mols)==1
                 observed=Chem.MolToSmiles(mols[0],isomericSmiles=False)
                 assert observed==Chem.MolToSmiles(Chem.MolFromSmiles(expected),isomericSmiles=False)

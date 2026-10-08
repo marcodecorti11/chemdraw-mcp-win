@@ -56,7 +56,7 @@ async def test_native_styled_job_over_mcp(tmp_path):
                 created.append(final)
                 assert result['audit']['lab_style']['sha256']==package['sha256']
                 assert result['audit']['status']=='checks_passed'
-                assert json.loads((tmp_path/'styled/request.json').read_text())['layout']['label_gap']==8
+                assert json.loads((tmp_path/'styled/request.json').read_text(encoding='utf-8'))['layout']['label_gap']==8
                 assert (tmp_path/'styled/lab-style.json').read_bytes()==(tmp_path/'style.json').read_bytes()
                 print('V09_STYLED_REVIEW='+result['review'])
                 cells=result['audit']['grid_audit']['verification']['cells']
@@ -78,8 +78,11 @@ async def test_native_styled_job_over_mcp(tmp_path):
 ])
 def test_native_selected_route(tmp_path,source,target):
     from chemdraw_macos.route_suggestions import suggest_routes,annotate_selected_route_file
-    path=ROOT/'examples/sn2-annotation-input.cdxml'
-    suggestions=suggest_routes(path.read_text(),source,target)
+    from native_helpers import importable_sn2
+    # Windows ChemDraw 26.1: associated symbol positions (native_helpers); unchanged on macOS.
+    path=tmp_path/'sn2-annotation-input.cdxml'
+    path.write_text(importable_sn2((ROOT/'examples/sn2-annotation-input.cdxml').read_text(encoding='utf-8')),encoding='utf-8',newline='')
+    suggestions=suggest_routes(path.read_text(encoding='utf-8'),source,target)
     assert suggestions['candidates']
     b=Bridge();baseline=b.documents();final=None
     try:
@@ -97,10 +100,11 @@ def test_native_owned_movement_with_charge_caption_and_internal_arrow(tmp_path):
     from chemdraw_macos.annotations import plan_annotations
     from chemdraw_macos.ownership import build_ownership,move_file
     from chemdraw_macos.editing import source_token
-    source=(ROOT/'examples/sn2-annotation-input.cdxml').read_text()
+    from native_helpers import importable_sn2
+    source=importable_sn2((ROOT/'examples/sn2-annotation-input.cdxml').read_text(encoding='utf-8'))
     arrow={'key':'leaving','electrons':2,'source':{'kind':'bond','id':'2105','offset':[0,0]},
            'target':{'kind':'atom','id':'2104','offset':[4,13]},'controls':[[-5,26],[8,14]]}
-    text,plan=plan_annotations(source,[arrow]);path=tmp_path/'input.cdxml';path.write_text(text)
+    text,plan=plan_annotations(source,[arrow]);path=tmp_path/'input.cdxml';path.write_text(text,encoding='utf-8',newline='')
     owners=[{'key':name,'fragment_ids':[fid],'caption_ids':[tid]} for name,fid,tid in
             [('bromide','1001','970'),('substrate','2002','971'),('product','3003','972'),('iodide','4004','973')]]
     state=build_ownership(text,owners,[{'curve_id':plan['arrows'][0]['curve_id'],
@@ -111,8 +115,8 @@ def test_native_owned_movement_with_charge_caption_and_internal_arrow(tmp_path):
                                                             {'owner_key':'substrate','delta':[10,0]}])
         final=result['document']['document_id']
         assert result['audit']['status']=='checks_passed'
-        assert result['ownership']['source_token']==source_token((tmp_path/'move/figure.cdxml').read_text())
-        assert path.read_text()==text
+        assert result['ownership']['source_token']==source_token((tmp_path/'move/figure.cdxml').read_text(encoding='utf-8'))
+        assert path.read_text(encoding='utf-8')==text
         print('V09_MOVE_REVIEW='+result['review'])
     finally:
         if final is not None:b.close(final)
@@ -130,7 +134,8 @@ def test_native_expanded_reaction_with_salt_water_halides_and_coefficients(tmp_p
     b=Bridge();baseline=b.documents();final=None
     try:
         result=build_reaction_series(b,steps,str(tmp_path/'reactions'),layout={'gap':8,'margin':18})
-        final=result['document']['document_id']
+        # Auto presentation without visible documents is background, which closes its result.
+        final=None if result.get('document_closed') else result['document']['document_id']
         assert result['audit']['status']=='checks_passed'
         assert len(result['audit']['verification']['steps'])==2
         assert not result['audit']['chemical_balance_certified']

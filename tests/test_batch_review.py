@@ -73,4 +73,4 @@ def test_reserved_source_key_cannot_overwrite_frozen_source_backup(tmp_path):
     assert report['status'] == 'completed'
     folder = tmp_path / 'out' / 'source'
     assert (folder / 'source.cdxml').is_file()
-    assert any(path.read_text() == SAMPLE for path in folder.rglob('*.cdxml'))
+    assert any(path.read_text(encoding='utf-8') == SAMPLE for path in folder.rglob('*.cdxml'))

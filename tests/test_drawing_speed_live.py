@@ -3,6 +3,7 @@ import json
 import os
 import platform
 import plistlib
+import sys
 from collections import Counter
 from importlib.metadata import version
 from pathlib import Path
@@ -47,8 +48,12 @@ def test_native_delivery_modes_and_timing_comparison(tmp_path, monkeypatch):
     report = {'environment': {'macos': platform.mac_ver()[0], 'architecture': platform.machine(),
                               'python': platform.python_version(), 'rdkit': version('rdkit'),
                               'resvg-py': version('resvg-py')}, 'runs': []}
-    with (bridge.app / 'Contents/Info.plist').open('rb') as handle:
-        report['environment']['chemdraw'] = plistlib.load(handle)['CFBundleShortVersionString']
+    if sys.platform == 'win32':  # ChemDraw.exe version resource instead of the Mac bundle plist
+        from chemdraw_macos.windows_native import app_version
+        report['environment']['chemdraw'] = app_version(bridge.app)
+    else:
+        with (bridge.app / 'Contents/Info.plist').open('rb') as handle:
+            report['environment']['chemdraw'] = plistlib.load(handle)['CFBundleShortVersionString']
     request = {'molecules': [{'format': 'smiles', 'value': 'Cn1c(=O)c2c(ncn2C)n(C)c1=O', 'label': 'Caffeine'}]}
     try:
         # First call is reported separately, not pooled into the warm comparison.
@@ -69,12 +74,12 @@ def test_native_delivery_modes_and_timing_comparison(tmp_path, monkeypatch):
                                      str(tmp_path / f'{index}-{mode}'), presentation='shared', document_id=did)
                 elapsed = perf_counter() - started
             report['runs'].append({'mode': mode, 'seconds': elapsed, 'native_calls': dict(operations), 'result': result})
-            (tmp_path / 'benchmark.json').write_text(json.dumps(report, indent=2))
+            (tmp_path / 'benchmark.json').write_text(json.dumps(report, indent=2),encoding='utf-8',newline='')
             assert result['status'] == 'completed', result
             assert result['document']['molecule_count'] == 1
             assert all(result['checks'].values())
             from rdkit import Chem
-            mol = Chem.MolsFromCDXML(Path(result['artifacts']['cdxml']).read_text())[0]
+            mol = Chem.MolsFromCDXML(Path(result['artifacts']['cdxml']).read_text(encoding='utf-8'))[0]
             rings = mol.GetRingInfo().AtomRings()
             six, five = next(r for r in rings if len(r) == 6), next(r for r in rings if len(r) == 5)
             a, b = set(six) & set(five)
@@ -92,7 +97,7 @@ def test_native_delivery_modes_and_timing_comparison(tmp_path, monkeypatch):
         assert bridge.documents() == baseline
         assert {did: _document_content(bridge, did) for did in before} == before
         report['preexisting_documents_unchanged'] = True
-        (tmp_path / 'benchmark.json').write_text(json.dumps(report, indent=2))
+        (tmp_path / 'benchmark.json').write_text(json.dumps(report, indent=2),encoding='utf-8',newline='')
         print('DRAWING_BENCHMARK=' + str(tmp_path / 'benchmark.json'))
     finally:
         backend.close()

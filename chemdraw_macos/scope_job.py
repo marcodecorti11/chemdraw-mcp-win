@@ -175,11 +175,11 @@ def build_scope_job(bridge,job,output_dir):
             did = drawn['document']['document_id'];owned.append(did);audit['drawing_audit'] = drawn['audit']
             snapshot = out/'drawn-native.cdxml';_native(bridge.export,did,str(snapshot),'cdxml')
             cells = drawn['audit']['grid_audit']['verification']['cells']
-            arranged,group_plan = arrange_scope_groups(snapshot.read_text(),cells,plan['groups'],plan['columns'],
+            arranged,group_plan = arrange_scope_groups(snapshot.read_text(encoding='utf-8'),cells,plan['groups'],plan['columns'],
                 plan['layout'],plan['frame'],plan['separators'])
-            (out/'grouped-planned.cdxml').write_text(arranged);_write_json(out/'group-layout.json',group_plan)
+            (out/'grouped-planned.cdxml').write_text(arranged,encoding='utf-8',newline='');_write_json(out/'group-layout.json',group_plan)
             grouped = _native(bridge.create,arranged);gid = grouped['document']['document_id'];owned.append(gid)
-            grouped_path = out/'grouped-native.cdxml';_native(bridge.export,gid,str(grouped_path),'cdxml');native = grouped_path.read_text()
+            grouped_path = out/'grouped-native.cdxml';_native(bridge.export,gid,str(grouped_path),'cdxml');native = grouped_path.read_text(encoding='utf-8')
             verification = verify_scope(arranged,native,group_plan['layout']);audit['grouped_verification'] = verification
             from .styles import verify_custom_style
             audit['custom_style_verification'] = verify_custom_style(arranged,native,plan['preset'])
@@ -208,7 +208,7 @@ def build_scope_job(bridge,job,output_dir):
                 '<p>Explicit approved candidates. No experimental yields. Visual review required.</p><ul>'+summary+'</ul>'
                 '<img style="max-width:100%" src="figure/figure.png"><p><a href="figure/figure.cdxml">Editable ChemDraw</a> '
                 '<a href="figure/figure.svg">SVG</a> <a href="figure/figure.png">PNG</a> <a href="plan.json">Selection and groups</a> '
-                '<a href="audit.json">Audit</a></p>')
+                '<a href="audit.json">Audit</a></p>',encoding='utf-8',newline='')
             return {'document':final['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit,'plan':plan}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),owned_document_ids=owned,

@@ -71,7 +71,7 @@ def test_acyclic_boxed_scope_retains_parent_backbone_without_explicit_scaffold(t
             {'label':'Analogues','compound_ids':[str(i) for i in range(1,9)]}]
     b=BatchBridge(tmp_path/'work')
     result=draw_scope_table(b,records,tmp_path/'out',groups=groups,separators=False,exports='canvas')
-    text=Path(result['artifacts']['cdxml']).read_text();root=ET.fromstring(text)
+    text=Path(result['artifacts']['cdxml']).read_text(encoding='utf-8');root=ET.fromstring(text)
     assert_core_orientation(_isolated(root,root.find('page/fragment')),text,LYSINE_SCOPE[0])
     assert len([e for e in b.events if e[0]=='create'])==1
     assert not any(e[0]=='close' for e in b.events)
@@ -143,7 +143,7 @@ def test_uncertain_finish_retains_the_working_document_without_retry(tmp_path):
     b.finish_scope=fail_finish
     with pytest.raises(NativeUncertain):
         draw_scope_table(b,RECORDS,tmp_path/'out',groups=GROUPS)
-    audit=json.loads((tmp_path/'out/audit.json').read_text())
+    audit=json.loads((tmp_path/'out/audit.json').read_text(encoding='utf-8'))
     assert audit['working_document_id'] in b.docs
     assert len(calls)==1
     assert not any(e[0]=='close' for e in b.events)
@@ -212,3 +212,19 @@ def test_explicit_columns_remain_an_upper_bound(monkeypatch):
     with pytest.raises(ValueError,match='does not fit'):
         scope_table._layout(measured(seed),RECORDS,GROUPS,3,None,True,False,seed=seed)
     assert set(calls)=={1,2,3}
+
+
+def test_platform_without_paper_change_measures_hidden_then_opens_one_visible_table(tmp_path):
+    # Windows ChemDraw cannot change a document's paper after opening, so the interactive table
+    # is measured in a hidden copy and the finished table is opened visibly exactly once.
+    from chemdraw_macos.scope_table import draw_scope_table
+    b=BatchBridge(tmp_path/'work');b.same_document_scope_finish=False;before=b.docs.copy()
+    result=draw_scope_table(b,RECORDS,tmp_path/'out',groups=GROUPS,columns=3,
+        scaffold_smiles=PARENT,separators=False)
+    assert result['status']=='completed' and all(result['checks'].values())
+    assert set(b.docs)-set(before)=={result['document']['document_id']}
+    creates=[e for e in b.events if e[0]=='create']
+    assert len(creates)==2 and creates[-1][1]==result['document']['document_id']
+    assert ('close',creates[0][1]) in b.events and not any(e[0]=='finish_scope' for e in b.events)
+    assert result['presentation']['same_working_document'] is False
+    assert result['presentation']['measurement_documents']==1

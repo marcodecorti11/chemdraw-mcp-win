@@ -88,7 +88,7 @@ def test_delivery_rejects_measured_intramolecular_collision(tmp_path):
     text=ETHANOL.replace('<t p="72 40">','<t p="72 40" BoundingBox="39 39 76 48">')
     artifacts={}
     for fmt,content in [('cdxml',text),('svg','<svg/>'),('png','placeholder')]:
-        path=tmp_path/f'figure.{fmt}';path.write_text(content);artifacts[fmt]=str(path)
+        path=tmp_path/f'figure.{fmt}';path.write_text(content,encoding='utf-8',newline='');artifacts[fmt]=str(path)
     audit={'status':'checks_passed','checks':{k:True for k in (
         'native_import_identity','native_cleanup_identity','preexisting_documents_unchanged','final_grid_checks')}}
     with pytest.raises(ValueError,match='placement collision'):
@@ -153,7 +153,7 @@ def test_mcp_has_typed_front_door_and_reduced_drawing_profile():
 
 def test_cli_calls_the_same_harness(tmp_path,monkeypatch,capsys):
     from chemdraw_macos import cli,harness
-    source=tmp_path/'request.json';source.write_text(json.dumps({'molecules':[{'value':'CCO','format':'smiles'}]}))
+    source=tmp_path/'request.json';source.write_text(json.dumps({'molecules':[{'value':'CCO','format':'smiles'}]}),encoding='utf-8',newline='')
     monkeypatch.setattr(cli,'Bridge',lambda:object())
     calls=[]
     def run(*args,**kwargs):calls.append((args,kwargs));return {'status':'completed'}

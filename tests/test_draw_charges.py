@@ -23,7 +23,7 @@ def test_charge_style_is_recorded_before_any_native_import(tmp_path):
     with pytest.raises(RuntimeError, match='import timeout'):
         draw_structures(Timeout(), [{'compound_id':'a','label':'Nitrobenzene','smiles':'O=[N+]([O-])c1ccccc1'}],
                         str(tmp_path/'out'), charge_style='circled')
-    assert json.loads((tmp_path/'out/request.json').read_text())['charge_style']=='circled'
+    assert json.loads((tmp_path/'out/request.json').read_text(encoding='utf-8'))['charge_style']=='circled'
 
 
 def test_charge_requests_use_formal_charge_not_label_and_skip_existing_symbols():
@@ -54,7 +54,7 @@ def test_cli_forwards_charge_style(tmp_path,monkeypatch):
     calls=[]
     monkeypatch.setattr(cli,'Bridge',lambda:object())
     monkeypatch.setattr(cli,'draw_structures',lambda *a,**kw:calls.append(kw) or {})
-    path=tmp_path/'input.json';path.write_text(json.dumps({'structures':[],'charge_style':'circled'}))
+    path=tmp_path/'input.json';path.write_text(json.dumps({'structures':[],'charge_style':'circled'}),encoding='utf-8',newline='')
     assert cli.main(['draw','--manifest',str(path),'--output',str(tmp_path/'out')])==0
     assert calls[0]['charge_style']=='circled'
 

@@ -9,7 +9,7 @@ import re
 import xml.etree.ElementTree as ET
 
 from .polish import supported_root, chemical_signature
-from .core import validate_cdxml
+from .core import require_export_formats, validate_cdxml
 from .editing import verify_native_edit
 from .workflow import remap_ids, content_fingerprint, _write_json
 from .native_lock import NativeBusy
@@ -125,13 +125,13 @@ def _document_content(bridge,document_id):
         # Native save/export can bind an untitled document or clear a dirty flag.
         # Read unsaved content through the API, including named modified drawings.
         from .addin import read_preserving_active
-        path.write_text(_native(read_preserving_active,bridge,document_id)['cdxml'])
+        path.write_text(_native(read_preserving_active,bridge,document_id)['cdxml'],encoding='utf-8',newline='')
         from .shared import fingerprint
-        return fingerprint(path.read_text())
+        return fingerprint(path.read_text(encoding='utf-8'))
     else:
         _native(bridge.export,document_id,str(path),'cdxml')
-    root=validate_cdxml(path.read_text())
-    for key in ('Name','CreationProgram','WindowPosition','WindowSize'):root.attrib.pop(key,None)
+    root=validate_cdxml(path.read_text(encoding='utf-8'))
+    for key in ('Name','CreationProgram','WindowPosition','WindowSize','WindowIsZoomed'):root.attrib.pop(key,None)
     def record(e):
         return (e.tag,tuple(sorted(e.attrib.items())),e.text if e.tag=='s' else (e.text or '').strip(),tuple(record(c) for c in e))
     return record(root)
@@ -149,7 +149,7 @@ def _report(out,report):
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>ChemDraw batch export</title>
 <style>body{font:16px system-ui;margin:32px;background:#f2f4f5;color:#182326}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}article{background:white;border:1px solid #ccd3d5;padding:20px;border-radius:12px}img{width:100%;height:280px;object-fit:contain}a{color:#17617c}</style>
 <h1>ChemDraw batch export</h1><p>Visual review required. Diagnostic or uncertain outputs are not approved figures. No styling or layout changes requested.</p>
-<p><a href="audit.json">Batch audit</a> · <a href="manifest.json">Manifest</a></p><main>'''+''.join(cards)+'</main></html>')
+<p><a href="audit.json">Batch audit</a> · <a href="manifest.json">Manifest</a></p><main>'''+''.join(cards)+'</main></html>',encoding='utf-8',newline='')
 
 
 def batch_export(bridge,items,output_dir,pixels=3200):
@@ -171,6 +171,7 @@ def batch_export(bridge,items,output_dir,pixels=3200):
         formats=item.get('formats',[])
         if not isinstance(formats,list) or any(not isinstance(v,str) or v not in ('cdxml','svg','png','pdf','cdx') for v in formats):
             raise ValueError('Unsupported export formats')
+        require_export_formats(bridge,formats)
         normalized.append({'key':key,'source':str(Path(source).expanduser()),'formats':list(dict.fromkeys(['cdxml','svg','png']+formats))})
     # All input validation precedes native calls. Freeze source text before import.
     prepared={};rows=[]
@@ -203,7 +204,7 @@ def batch_export(bridge,items,output_dir,pixels=3200):
             folder=out/row['key'];folder.mkdir();did=None;uncertain=False
             source=prepared[row['key']]
             snapshots=folder/'snapshots';snapshots.mkdir()
-            (snapshots/'source.cdxml').write_text(source)
+            (snapshots/'source.cdxml').write_text(source,encoding='utf-8',newline='')
             try:
                 if _hash(Path(row['source']))!=row['source_sha256']:raise ValueError('Source file changed after preflight')
                 if baseline is None:
@@ -216,7 +217,7 @@ def batch_export(bridge,items,output_dir,pixels=3200):
                 save()
                 target=folder/(row['key']+'.cdxml')
                 _native(bridge.export,did,str(target),'cdxml',pixels)
-                row['exports'].append('cdxml');native=target.read_text();verification=_verify(source,native)
+                row['exports'].append('cdxml');native=target.read_text(encoding='utf-8');verification=_verify(source,native)
                 row['checks'].update(mapped_chemistry_preserved=True,atom_coordinates_preserved=True,
                                      captions_and_arrow_endpoints_preserved=True)
                 if verification is not None:
@@ -226,7 +227,7 @@ def batch_export(bridge,items,output_dir,pixels=3200):
                     _native(bridge.export,did,str(folder/(row['key']+'.'+fmt)),fmt,pixels)
                     row['exports'].append(fmt);save()
                 final=snapshots/'post-export.cdxml';_native(bridge.export,did,str(final),'cdxml',pixels)
-                if content_fingerprint(native)!=content_fingerprint(final.read_text()):raise ValueError('Working document changed during exports')
+                if content_fingerprint(native)!=content_fingerprint(final.read_text(encoding='utf-8')):raise ValueError('Working document changed during exports')
                 if _hash(Path(row['source']))!=row['source_sha256']:raise ValueError('Source file changed during export')
                 row['checks'].update(source_file_unchanged=True,working_content_unchanged=True)
                 row['status']='exported'

@@ -97,7 +97,7 @@ def test_stale_selection_rejected_before_native_create(tmp_path):
     class Fake:
         lock=nullcontext()
         def _new_path(self,*a):return tmp_path/'snapshot.cdxml'
-        def export(self,*a): (tmp_path/'snapshot.cdxml').write_text(text.replace('118 100','119 100'))
+        def export(self,*a): (tmp_path/'snapshot.cdxml').write_text(text.replace('118 100','119 100'),encoding='utf-8',newline='')
         def create(self,*a):pytest.fail('Stale source reached native creation')
     with pytest.raises(ValueError,match='stale'):
         edit_targets_document(Fake(),42,str(tmp_path/'out'),selected,{'kind':'attach_ring','size':6,'angle_degrees':0})

@@ -64,7 +64,7 @@ def test_finish_scope_stops_on_edits_identity_changes_or_uncertainty(tmp_path,mo
 
 
 def test_native_clear_checks_identity_file_and_edits_before_dispatch():
-    text=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text()
+    text=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     branch=text.split('else if operation is "clear_owned_scope" then')[1].split('else if operation')[0]
     before=branch.split('do command "selectAll"')[0]
     assert 'id of document 1' in before

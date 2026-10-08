@@ -10,7 +10,7 @@ from chemdraw_macos.core import Bridge
 
 
 def test_active_document_uses_json_integer_serialization():
-    script = Path('chemdraw_macos/native.applescript').read_text()
+    script = Path('chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     branch = script.split('if operation is "active_document" then', 1)[1].split('end if', 1)[0]
     assert 'my jsonInteger(' in branch
     assert 'as text' not in branch
@@ -20,7 +20,7 @@ def test_active_document_uses_json_integer_serialization():
 @pytest.mark.parametrize('document_id', [0, 42, 39262464, 999999999, 1000000000,
                                        1234567890, 2147483647, -1234567890, -2147483648, None])
 def test_native_active_id_roundtrip_is_exact_integer(document_id):
-    template = Path('chemdraw_macos/native.applescript').read_text()
+    template = Path('chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     helpers = template.split('on documentRow(d)', 1)[0]
     branch = template.split('if operation is "active_document" then', 1)[1].split('end if', 1)[0]
     branch = branch.replace('(count of documents)', 'fixtureCount').replace('id of document 1', 'fixtureID')

@@ -42,13 +42,13 @@ def draw_name(bridge, name, output_dir, allow_network=False, preset='house', pix
              'native_lookup': {'network_allowed': True, 'network_used': 'not observable',
                                'possible_provider': 'ChemDraw internal dictionaries or ChemACX'}}
     def save_audit():
-        (out/'audit.json').write_text(json.dumps(audit, indent=2, ensure_ascii=True))
+        (out/'audit.json').write_text(json.dumps(audit, indent=2, ensure_ascii=True),encoding='utf-8',newline='')
     with getattr(bridge, 'lock', nullcontext()):
         baseline = bridge.documents()
         out.mkdir()
         (out/'request.json').write_text(json.dumps({'name': name, 'allow_network': True,
-            'preset': preset, 'pixels': pixels}, indent=2, ensure_ascii=True))
-        (out/'caption-input.cdxml').write_text(source)
+            'preset': preset, 'pixels': pixels}, indent=2, ensure_ascii=True),encoding='utf-8',newline='')
+        (out/'caption-input.cdxml').write_text(source,encoding='utf-8',newline='')
         save_audit()
         try:
             created = bridge.create(source)
@@ -57,7 +57,7 @@ def draw_name(bridge, name, output_dir, allow_network=False, preset='house', pix
             save_audit()
             converted = bridge.convert_name(did)
             bridge.export(did, str(out/'figure.cdxml'), 'cdxml')
-            native = validate_cdxml((out/'figure.cdxml').read_text())
+            native = validate_cdxml((out/'figure.cdxml').read_text(encoding='utf-8'))
             fragments = native.findall('.//fragment')
             if not fragments or not native.findall('.//n') or converted['document']['molecule_count'] < 1:
                 raise ValueError('Native name conversion produced no structure; inspect retained document')
@@ -78,7 +78,7 @@ def draw_name(bridge, name, output_dir, allow_network=False, preset='house', pix
                 '<h1>'+html.escape(name)+'</h1><p>ChemDraw native interpretation. Chemical identity '
                 'and stereochemistry require review; no independent identity validation performed.</p>'
                 '<img src="figure.png" alt="Native chemical structure"><p>'
-                '<a href="figure.cdxml">Editable ChemDraw</a> · <a href="audit.json">Audit</a></p>')
+                '<a href="figure.cdxml">Editable ChemDraw</a> · <a href="audit.json">Audit</a></p>',encoding='utf-8',newline='')
             return {'status': audit['status'], 'document': converted['document'], 'audit': audit,
                     'review': str(out/'review.html'),
                     'artifacts': {fmt: str(out/f'figure.{fmt}') for fmt in ('cdxml','svg','png')}}

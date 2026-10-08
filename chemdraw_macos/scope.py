@@ -243,37 +243,37 @@ def grid_document(bridge,document_id,output_dir,cells,expected_source_token,pres
     with getattr(bridge,'lock',nullcontext()):
         baseline=_native(bridge.inspect,document_id)['document'];source_hash=_file_hash(baseline)
         snapshot=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(snapshot),'cdxml')
-        source=snapshot.read_text()
+        source=snapshot.read_text(encoding='utf-8')
         if source_token(source)!=expected_source_token:raise ValueError('Source is stale; analyze again')
         prepared,state=prepare_scope(source,cells,preset)
         out.mkdir()
         try:
-            (out/'before.cdxml').write_text(source)
+            (out/'before.cdxml').write_text(source,encoding='utf-8',newline='')
             recipe={'schema_version':1,'cells':cells,'expected_source_token':expected_source_token,'preset':preset,
                     'columns':columns,'width':width,'height':height,'margin':margin,'h_gap':h_gap,
                     'v_gap':v_gap,'label_gap':label_gap,'pixels':pixels}
             _write_json(out/'recipe.json',recipe)
             for fmt in ('svg','png'):_native(bridge.export,document_id,str(out/f'before.{fmt}'),fmt,pixels)
             result=_native(bridge.create,prepared);did=result['document']['document_id'];created.append(did)
-            snap=bridge._new_path('.cdxml');_native(bridge.export,did,str(snap),'cdxml');native=snap.read_text()
+            snap=bridge._new_path('.cdxml');_native(bridge.export,did,str(snap),'cdxml');native=snap.read_text(encoding='utf-8')
             mapping,_=verify_molecules(prepared,native)
             from .styles import verify_custom_style
             verify_custom_style(prepared,native,preset)
             measured_cells=remap_cells(state['cells'],mapping)
             arranged,plan=arrange_scope(native,measured_cells,columns,width,height,margin,h_gap,v_gap,label_gap)
             check=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(check),'cdxml')
-            if source_token(check.read_text())!=expected_source_token:raise ValueError('Source became stale before final creation')
+            if source_token(check.read_text(encoding='utf-8'))!=expected_source_token:raise ValueError('Source became stale before final creation')
             result=_native(bridge.create,arranged);did=result['document']['document_id'];created.append(did)
             for fmt in ('cdxml','svg','png'):_native(bridge.export,did,str(out/f'figure.{fmt}'),fmt,pixels)
-            verification=verify_scope(arranged,(out/'figure.cdxml').read_text(),plan)
-            style_check=verify_custom_style(arranged,(out/'figure.cdxml').read_text(),preset)
+            verification=verify_scope(arranged,(out/'figure.cdxml').read_text(encoding='utf-8'),plan)
+            style_check=verify_custom_style(arranged,(out/'figure.cdxml').read_text(encoding='utf-8'),preset)
             if style_check is not None:audit['custom_style_verification']=style_check
             from .core import preset_settings
             if not all(abs(v-float(preset_settings(preset)['BondLength']))<.03 for v in verification['median_bond_lengths_pt']):
                 raise ValueError('Native molecular scale differs from preset')
             check=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(check),'cdxml')
             if (_native(bridge.inspect,document_id)['document']!=baseline or _file_hash(baseline)!=source_hash
-                    or source_token(check.read_text())!=expected_source_token):raise RuntimeError('Source changed during grid production')
+                    or source_token(check.read_text(encoding='utf-8'))!=expected_source_token):raise RuntimeError('Source changed during grid production')
             audit.update(status='checks_passed',source_document=baseline,normalization=state['normalization'],
                          layout=plan,verification=verification,renderer='native ChemDraw',
                          yield_provenance='Caller supplied. Not experimental validation.',
@@ -285,7 +285,7 @@ def grid_document(bridge,document_id,output_dir,cells,expected_source_token,pres
 <style>body{{font:16px system-ui;margin:32px;background:#f2f4f5;color:#182326}}main{{display:grid;grid-template-columns:1fr 1fr;gap:24px}}figure{{background:white;padding:24px;margin:0}}img{{width:100%;height:480px;object-fit:contain}}td{{padding:6px 20px}}@media(max-width:800px){{main{{grid-template-columns:1fr}}}}</style>
 <h1>ChemDraw scope grid</h1><p>Explicit compound order and caller-supplied yields. Molecular scale, orientation and native page fit checked. Visual review required.</p>
 <main><figure><figcaption>Before</figcaption><img src="before.png" alt="Original drawing"></figure><figure><figcaption>Scope grid</figcaption><img src="figure.png" alt="Native scope grid"></figure></main>
-<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="recipe.json">Recipe</a> · <a href="audit.json">Audit</a></p><table><tr><th>Compound</th><th>Displayed metadata</th></tr>{rows}</table></html>''')
+<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="recipe.json">Recipe</a> · <a href="audit.json">Audit</a></p><table><tr><th>Compound</th><th>Displayed metadata</th></tr>{rows}</table></html>''',encoding='utf-8',newline='')
             for old in created[:-1]:
                 _native(bridge.close,old)
             created=created[-1:]
@@ -329,7 +329,7 @@ def grid_file(bridge,path,output_dir,cells,expected_source_token=None,**options)
         # grid_document owns normal output creation. Failures before that
         # point still need a diagnostic audit and the exact frozen source.
         if completed is not None:audit=completed['audit']
-        elif (out/'audit.json').is_file():audit=json.loads((out/'audit.json').read_text())
+        elif (out/'audit.json').is_file():audit=json.loads((out/'audit.json').read_text(encoding='utf-8'))
         else:audit={'checks':{},'visual_review':'required'}
         out.mkdir(exist_ok=True)
         frozen=out/'source-input.cdxml';frozen.write_bytes(data)
@@ -344,7 +344,7 @@ def grid_file(bridge,path,output_dir,cells,expected_source_token=None,**options)
             # Create from frozen text, never ask ChemDraw to reopen a mutable
             # input pathname after it has been validated.
             imported=_native(bridge.create,source);did=imported['document']['document_id']
-            snap=bridge._new_path('.cdxml','backups');_native(bridge.export,did,str(snap),'cdxml');native=snap.read_text()
+            snap=bridge._new_path('.cdxml','backups');_native(bridge.export,did,str(snap),'cdxml');native=snap.read_text(encoding='utf-8')
             mapping,_=verify_molecules(source,native)
             if not source_unchanged():raise ValueError('Source file changed during import')
             completed=grid_document(bridge,did,output_dir,remap_cells(cells,mapping),source_token(native),**options)

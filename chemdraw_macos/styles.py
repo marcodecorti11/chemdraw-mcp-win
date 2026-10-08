@@ -19,7 +19,37 @@ LIMITS={'BondLength':(5,100),'LineWidth':(.1,5),'BoldWidth':(.1,10),
         'ChainAngle':(0,180),'MarginWidth':(0,10),'HashSpacing':(.1,10)}
 FACES={0,1,2,3,96,97,98,99}
 
+def _windows_font_families():
+    """GDI font families, the inventory ChemDraw for Windows offers (system and per-user fonts)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class LOGFONTW(ctypes.Structure):
+        _fields_=[('lfHeight',wintypes.LONG),('lfWidth',wintypes.LONG),('lfEscapement',wintypes.LONG),
+                  ('lfOrientation',wintypes.LONG),('lfWeight',wintypes.LONG),('lfItalic',wintypes.BYTE),
+                  ('lfUnderline',wintypes.BYTE),('lfStrikeOut',wintypes.BYTE),('lfCharSet',wintypes.BYTE),
+                  ('lfOutPrecision',wintypes.BYTE),('lfClipPrecision',wintypes.BYTE),('lfQuality',wintypes.BYTE),
+                  ('lfPitchAndFamily',wintypes.BYTE),('lfFaceName',wintypes.WCHAR*32)]
+
+    callback_type=ctypes.WINFUNCTYPE(ctypes.c_int,ctypes.POINTER(LOGFONTW),ctypes.c_void_p,wintypes.DWORD,wintypes.LPARAM)
+    gdi32,user32=ctypes.WinDLL('gdi32'),ctypes.WinDLL('user32')
+    user32.GetDC.restype=wintypes.HDC;user32.GetDC.argtypes=[wintypes.HWND]
+    user32.ReleaseDC.argtypes=[wintypes.HWND,wintypes.HDC]
+    gdi32.EnumFontFamiliesExW.argtypes=[wintypes.HDC,ctypes.POINTER(LOGFONTW),callback_type,wintypes.LPARAM,wintypes.DWORD]
+    names=set()
+    def collect(logfont,metric,kind,param):
+        names.add(logfont.contents.lfFaceName);return 1
+    callback=callback_type(collect)
+    query=LOGFONTW();query.lfCharSet=1  # DEFAULT_CHARSET with an empty face name: every family
+    dc=user32.GetDC(None)
+    try:gdi32.EnumFontFamiliesExW(dc,ctypes.byref(query),callback,0,0)
+    finally:user32.ReleaseDC(None,dc)
+    names.discard('')
+    if not names:raise ValueError('Cannot verify installed font families')
+    return sorted(names)
+
 def _installed_fonts():
+    if sys.platform=='win32':return _windows_font_families()
     if sys.platform!='darwin':raise ValueError('Custom font availability requires the rendering Mac')
     script='ObjC.import("AppKit"); JSON.stringify(ObjC.deepUnwrap($.NSFontManager.sharedFontManager.availableFontFamilies));'
     try:

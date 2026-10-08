@@ -1,3 +1,4 @@
+import sys
 import json
 from pathlib import Path
 import subprocess
@@ -5,19 +6,20 @@ import subprocess
 import pytest
 
 
+@pytest.mark.skipif(sys.platform == 'win32', reason='POSIX shell launchers under ~/Library; a Windows checkout connection is not implemented (PORT_RESULTS)')
 def test_checkout_launchers_follow_source_without_reinstall_and_backup_old(tmp_path):
     from chemdraw_macos.client_install import connect_checkout
     checkout=tmp_path/'source with spaces';checkout.mkdir()
-    (checkout/'pyproject.toml').write_text('[project]\nname="chemdraw-mcp-macos"\n')
-    (checkout/'uv.lock').write_text('fixture')
+    (checkout/'pyproject.toml').write_text('[project]\nname="chemdraw-mcp-macos"\n',encoding='utf-8',newline='')
+    (checkout/'uv.lock').write_text('fixture',encoding='utf-8',newline='')
     (checkout/'chemdraw_macos').mkdir()
-    (checkout/'chemdraw_macos/development.py').write_text('')
+    (checkout/'chemdraw_macos/development.py').write_text('',encoding='utf-8',newline='')
     uv=tmp_path/'fake uv'
-    uv.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n');uv.chmod(0o700)
+    uv.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n',encoding='utf-8',newline='');uv.chmod(0o700)
     home=tmp_path/'user';bin=home/'Library/Application Support/ChemDraw MCP/bin';bin.mkdir(parents=True)
-    (bin/'chemdraw-mcp').write_text('old runtime')
+    (bin/'chemdraw-mcp').write_text('old runtime',encoding='utf-8',newline='')
     result=connect_checkout(checkout,uv=uv,home=home)
-    assert any(Path(p).read_text()=='old runtime' for p in result['backups'])
+    assert any(Path(p).read_text(encoding='utf-8')=='old runtime' for p in result['backups'])
     assert not (home/'.codex/config.toml').exists()
     for name,args in [('chemdraw-mcp',['--desktop-serve']),('chemdraw-mac',['doctor','--no-connect']),('chemdraw-mcp-macos',[])]:
         output=subprocess.check_output([bin/name,*args],text=True).splitlines()

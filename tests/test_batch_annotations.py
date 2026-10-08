@@ -13,8 +13,8 @@ from test_annotations import HEAD_RENDER_ARROWS
 
 
 ROOT = Path(__file__).parents[1]
-SOURCE = (ROOT / 'examples/sn2-annotation-input.cdxml').read_text()
-RECIPE = json.loads((ROOT / 'examples/sn2-annotation-recipe.json').read_text())
+SOURCE = (ROOT / 'examples/sn2-annotation-input.cdxml').read_text(encoding='utf-8')
+RECIPE = json.loads((ROOT / 'examples/sn2-annotation-recipe.json').read_text(encoding='utf-8'))
 
 
 def annotated(head='Full'):
@@ -32,7 +32,7 @@ def annotated(head='Full'):
 def test_supported_annotation_batch_exports_preserve_source_and_report_checks(tmp_path, head):
     source = tmp_path / 'mechanism.cdxml'
     text = annotated(head)
-    source.write_text(text)
+    source.write_text(text,encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path / 'work')
     before = bridge.documents()
     result = batch_export(bridge, [{'key': 'mechanism', 'source': str(source)}], str(tmp_path / 'out'))
@@ -45,8 +45,8 @@ def test_supported_annotation_batch_exports_preserve_source_and_report_checks(tm
     assert item['annotation_verification']['id_map']
     assert bridge.documents() == before
     assert not bridge.managed
-    assert source.read_text() == text
-    assert (tmp_path / 'out' / 'mechanism' / 'mechanism.cdxml').read_text() == text
+    assert source.read_text(encoding='utf-8') == text
+    assert (tmp_path / 'out' / 'mechanism' / 'mechanism.cdxml').read_text(encoding='utf-8') == text
 
 
 def test_charge_only_native_input_and_plain_core_do_not_recurse_forever():
@@ -120,7 +120,7 @@ def test_unsupported_annotations_rejected_during_preflight(change):
 
 
 def test_annotation_native_timeout_stops_batch_without_close_or_retry(tmp_path):
-    source = tmp_path / 'mechanism.cdxml'; source.write_text(annotated())
+    source = tmp_path / 'mechanism.cdxml'; source.write_text(annotated(),encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path / 'work'); export = bridge.export
     def timeout(did, path, format, pixels=3200):
         if format == 'svg':

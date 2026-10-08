@@ -178,24 +178,24 @@ def run_reaction_batch(bridge,steps,out,*,preset='house',paper='auto',presentati
     with getattr(bridge,'lock',nullcontext()):
         baseline=_native(bridge.documents)['documents']
         original={d['document_id']:_document_content(bridge,d['document_id']) for d in baseline}
-        out.mkdir();(out/'planned.cdxml').write_text(planned)
+        out.mkdir();(out/'planned.cdxml').write_text(planned,encoding='utf-8',newline='')
         _write_json(out/'request.json',{'steps':steps,'preset':preset,'reaction_paper':paper})
         try:
             created=_native(bridge.create,planned,visible=False);did=created['document']['document_id'];owned.append(did)
             snap=out/'measured.cdxml';_native(bridge.export,did,str(snap),'cdxml')
-            native=snap.read_text();_verify(planned,native)
+            native=snap.read_text(encoding='utf-8');_verify(planned,native)
             recipe=remap_series(plan,remap_ids(planned,native))
             charges=[{'key':'charge_'+n.get('id'),'kind':'charge','atom_id':n.get('id')}
                      for n in ET.fromstring(native).findall('page/fragment/n')
                      if n.get('Charge','0') in ('1','-1')]
             if charges:
                 charged,charge_plan=plan_symbols(native,charges)
-                (out/'charges-planned.cdxml').write_text(charged)
+                (out/'charges-planned.cdxml').write_text(charged,encoding='utf-8',newline='')
                 audit['charge_plan']=charge_plan
                 _native(bridge.close,did);owned.remove(did)
                 created=_native(bridge.create,charged,visible=False);did=created['document']['document_id'];owned.append(did)
                 snap=out/'charges-measured.cdxml';_native(bridge.export,did,str(snap),'cdxml')
-                native=snap.read_text()
+                native=snap.read_text(encoding='utf-8')
                 charge_verification=verify_symbols(charged,native)
                 verify_symbol_clearance(native,[charge_verification['id_map'][s['symbol_id']]
                                                for s in charge_plan['symbols']],2)
@@ -203,10 +203,10 @@ def run_reaction_batch(bridge,steps,out,*,preset='house',paper='auto',presentati
             arranged,plan=_measured_layout(native,recipe,paper)
             _native(bridge.close,did);owned.remove(did)
             timer.mark('native_batch_measurement')
-            (out/'arranged.cdxml').write_text(arranged);_write_json(out/'recipe.json',plan)
+            (out/'arranged.cdxml').write_text(arranged,encoding='utf-8',newline='');_write_json(out/'recipe.json',plan)
             created=_native(bridge.create,arranged,visible=False);did=created['document']['document_id'];owned.append(did)
             figure=out/'figure';figure.mkdir();cdxml=figure/'figure.cdxml'
-            _native(bridge.export,did,str(cdxml),'cdxml');native=cdxml.read_text()
+            _native(bridge.export,did,str(cdxml),'cdxml');native=cdxml.read_text(encoding='utf-8')
             verification=verify_series(arranged,native,plan)
             if charges:
                 charge_verification=verify_symbols(arranged,native)
@@ -222,12 +222,12 @@ def run_reaction_batch(bridge,steps,out,*,preset='house',paper='auto',presentati
             verification['checks'].update(native_style=True,no_placement_collision_candidates=True,physical_paper=True)
             timer.mark('native_layout_verification')
             svg=figure/'figure.svg';_native(bridge.export,did,str(svg),'svg')
-            raw_svg=svg.read_text()
+            raw_svg=svg.read_text(encoding='utf-8')
             (figure/'figure.png').write_bytes(physical_png(raw_svg,600))
-            (figure/'preview.png').write_bytes(rasterize_svg(svg.read_text(),1200,background='white'))
-            svg.write_text(physical_svg(raw_svg)[0])
+            (figure/'preview.png').write_bytes(rasterize_svg(svg.read_text(encoding='utf-8'),1200,background='white'))
+            svg.write_text(physical_svg(raw_svg)[0],encoding='utf-8',newline='')
             post=out/'post-export.cdxml';_native(bridge.export,did,str(post),'cdxml')
-            verify_export_snapshot(native,post.read_text())
+            verify_export_snapshot(native,post.read_text(encoding='utf-8'))
             _native(bridge.close,did);owned.remove(did)
             current=_native(bridge.documents)['documents']
             if sorted(current,key=lambda d:d['document_id'])!=sorted(baseline,key=lambda d:d['document_id']):
@@ -246,7 +246,7 @@ def run_reaction_batch(bridge,steps,out,*,preset='house',paper='auto',presentati
             if presentation=='interactive':
                 shown=_native(bridge.create,native,visible=False);shown_id=shown['document']['document_id'];owned.append(shown_id)
                 check=out/'presented.cdxml';_native(bridge.export,shown_id,str(check),'cdxml')
-                _verify(native,check.read_text())
+                _verify(native,check.read_text(encoding='utf-8'))
                 _native(bridge.set_visibility,shown_id,True)
                 result.update(document=shown['document'],document_closed=False,
                               presentation={**result['presentation'],'mode':'interactive'})

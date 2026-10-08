@@ -65,12 +65,14 @@ def test_native_action_is_exposed_to_both_profiles_and_cli(tmp_path,monkeypatch)
     for profile in ('core','full'):
         tools={t.name:t for t in asyncio.run(server.get_server(profile).list_tools())}
         schema=tools['chemdraw_native_action'].inputSchema
-        assert set(schema['properties']['action']['enum'])==set(ACTIONS)
+        # Every allowlisted command on macOS; Windows omits submenu-only commands (test_windows_capabilities).
+        from chemdraw_macos.native_actions import available_actions
+        assert set(schema['properties']['action']['enum'])==set(available_actions())
         assert tools['chemdraw_native_action'].annotations.destructiveHint
 
 
 def test_native_action_script_checks_front_and_allowlist():
-    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text()
+    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     branch=script.split('else if operation is "native_action" then',1)[1].split('else if operation',1)[0]
     assert branch.index('id of document 1') < branch.index('do command')
     assert 'supportedCommands' in branch and 'not in supportedCommands' in branch

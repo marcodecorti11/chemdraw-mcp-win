@@ -43,7 +43,7 @@ def test_read_batches_post_read_identity_and_metadata_without_losing_target_guar
 
 
 def test_state_operation_checks_identity_after_gathering_metadata_without_activation():
-    script = Path('chemdraw_macos/native.applescript').read_text()
+    script = Path('chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     assert 'if operation is "active_document_state" then' in script
     branch = script.split('if operation is "active_document_state" then')[1].split('end if')[0]
     assert 'my documentRow(document 1)' in branch

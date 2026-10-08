@@ -69,7 +69,7 @@ class FakeBridge:
     def export(self, did, path, fmt, **kw):
         self.calls.append(fmt)
         if fmt == 'cdxml':
-            Path(path).write_text('<CDXML><page><fragment><n id="3" Element="6"/><n id="4" Element="8"/><b B="3" E="4"/></fragment></page></CDXML>')
+            Path(path).write_text('<CDXML><page><fragment><n id="3" Element="6"/><n id="4" Element="8"/><b B="3" E="4"/></fragment></page></CDXML>',encoding='utf-8',newline='')
         else:
             Path(path).write_bytes(b'fixture')
     def close(self, did):
@@ -86,8 +86,8 @@ def test_native_name_exports_and_reports_review_boundary(tmp_path):
     assert result['audit']['rdkit_used'] is False
     assert result['audit']['native_lookup']['network_used'] == 'not observable'
     assert Path(result['review']).is_file()
-    assert 'background:white' in Path(result['review']).read_text()
-    assert json.loads((out/'request.json').read_text())['name'] == 'methanol'
+    assert 'background:white' in Path(result['review']).read_text(encoding='utf-8')
+    assert json.loads((out/'request.json').read_text(encoding='utf-8'))['name'] == 'methanol'
 
 
 def test_native_name_uncertainty_stops_without_retry_or_close(tmp_path):
@@ -96,7 +96,7 @@ def test_native_name_uncertainty_stops_without_retry_or_close(tmp_path):
     with pytest.raises(RuntimeError, match='timeout'):
         draw_name(b,'methanol',str(out),allow_network=True)
     assert b.calls == ['create','convert']
-    audit=json.loads((out/'audit.json').read_text())
+    audit=json.loads((out/'audit.json').read_text(encoding='utf-8'))
     assert audit['status'] == 'uncertain'
     assert audit['owned_document_ids'] == [12]
 
@@ -114,7 +114,7 @@ def test_name_cli_and_mcp_use_the_same_workflow(tmp_path,monkeypatch):
 
 
 def test_native_command_checks_front_document_and_caption_before_execution():
-    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text()
+    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     branch=script.split('else if operation is "convert_name" then',1)[1].split('else if operation',1)[0]
     assert branch.index('id of document 1') < branch.index('do command "selectAll"')
     assert branch.index('count of captions') < branch.index('do command "selectAll"')

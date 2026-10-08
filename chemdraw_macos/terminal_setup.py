@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from .desktop_setup import SetupSession, diagnostic_details
 from .terminal_screen import SetupScreen
+from .private_files import make_private
 
 
 def run_setup(args, *, session=None, home=None, input_fn=None, stream=None, executable=None):
@@ -74,7 +75,7 @@ def run_setup(args, *, session=None, home=None, input_fn=None, stream=None, exec
         folder = Path(tempfile.mkdtemp(prefix='ChemDraw-MCP-Setup-', dir=downloads))
         target = folder/'ChemDraw MCP Native API.chemdrawaddin'
         with target.open('xb'):
-            target.chmod(0o600)
+            make_private(target)
         dispatch({'action': 'export_installer', 'path': str(target)})
         screen.show('Connect ChemDraw', [
             '1. Open ChemDraw > Add-ins > Add-in Manager.',
@@ -122,8 +123,9 @@ def run_setup(args, *, session=None, home=None, input_fn=None, stream=None, exec
                 raise ValueError('Diagnostic folder must not be a symbolic link')
             logs.mkdir(parents=True, exist_ok=True, mode=0o700)
             fd, name = tempfile.mkstemp(prefix='setup-', suffix='.txt', dir=logs)
-            with os.fdopen(fd, 'w') as handle:
+            with os.fdopen(fd, 'w', encoding='utf-8') as handle:
                 handle.write(report)
+            make_private(name)
             outcome += '\nDiagnostics saved. Share this report:\n'+name
         except (OSError, ValueError):
             outcome += '\nCould not save diagnostics. Copy the report below instead.\n'

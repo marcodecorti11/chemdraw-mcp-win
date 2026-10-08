@@ -10,6 +10,9 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from test_annotations import SOURCE,ARROWS,HEAD_RENDER_ARROWS
+from native_helpers import importable_sn2
+
+SOURCE=importable_sn2(SOURCE)  # Windows ChemDraw 26.1: associated symbol positions (native_helpers)
 
 pytestmark=pytest.mark.skipif(os.environ.get('CHEMDRAW_LIVE_TEST')!='1',reason='Requires running licensed ChemDraw')
 
@@ -33,7 +36,7 @@ async def test_native_curved_arrow_heads_through_mcp(tmp_path,head):
                 did=source['document']['document_id'];created.append(did)
                 report=await call('chemdraw_inspect_annotations',document_id=did)
                 from chemdraw_macos.annotations import verify_annotations
-                mapping=verify_annotations(SOURCE,Path(report['snapshot']).read_text())['id_map']
+                mapping=verify_annotations(SOURCE,Path(report['snapshot']).read_text(encoding='utf-8'))['id_map']
                 arrows=copy.deepcopy(ARROWS if head=='Full' else HEAD_RENDER_ARROWS)
                 for arrow in arrows:
                     for side in ('source','target'):arrow[side]['id']=mapping[arrow[side]['id']]

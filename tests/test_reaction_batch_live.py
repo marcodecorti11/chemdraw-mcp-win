@@ -36,7 +36,7 @@ def test_complete_glycoside_native_batch(tmp_path):
         assert atom.get('Element')==('7' if g.get('SymbolType')=='CirclePlus' else '8')
     assert Image.open(result['artifacts']['png']).info['dpi']==pytest.approx((600,600),abs=.02)
     report={'seconds':time.perf_counter()-started,'result':result}
-    (tmp_path/'native-result.json').write_text(json.dumps(report,indent=2))
+    (tmp_path/'native-result.json').write_text(json.dumps(report,indent=2),encoding='utf-8',newline='')
     print('REACTION_BATCH_NATIVE='+str(tmp_path/'native-result.json'))
 
 
@@ -51,7 +51,7 @@ def test_native_physical_paper_roundtrip(tmp_path,paper):
         # The export completed deterministically. Close only this owned blank copy.
         b.close(did)
         w,h=PAPERS[paper]
-        _verify_paper(path.read_text(),{'width_pt':w,'height_pt':h})
+        _verify_paper(path.read_text(encoding='utf-8'),{'width_pt':w,'height_pt':h})
         page=ET.parse(path).getroot().find('page')
         assert page.get('WidthPages')==page.get('HeightPages')=='1'
         assert list(map(float,page.get('BoundingBox').split()))==[0,0,w,h]

@@ -9,7 +9,7 @@ def test_png_uses_bounded_offline_raster_worker_and_retains_native_svg(tmp_path,
     native=[];raster=[];out=tmp_path/'preview.png'
     def export(op,*args):
         assert op=='export' and args[-1]=='Scalable Vector Graphics (SVG)'
-        native.append(Path(args[1]));native[-1].write_text(SVG)
+        native.append(Path(args[1]));native[-1].write_text(SVG,encoding='utf-8',newline='')
     def run(command,**kwargs):
         raster.append((command,kwargs));out.write_bytes(b'fixture-png')
     monkeypatch.setattr(bridge,'_run',export)
@@ -18,7 +18,10 @@ def test_png_uses_bounded_offline_raster_worker_and_retains_native_svg(tmp_path,
     assert raster[0][0]==[sys.executable,'-m','chemdraw_macos.raster',str(native[0]),str(out),'1600']
     assert raster[0][1]['timeout']==bridge.timeout
     assert raster[0][1]['check'] is True
-    assert native[0].read_text()==SVG
+    # The worker must not inherit the stdio MCP server's stdin pipe (it stalls on Windows).
+    import subprocess
+    assert raster[0][1]['stdin'] is subprocess.DEVNULL
+    assert native[0].read_text(encoding='utf-8')==SVG
     assert result['rasterizer']=='resvg'
 
 def test_doctor_describes_opt_in_resolver_and_actual_rasterizer(monkeypatch):

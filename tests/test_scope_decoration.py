@@ -119,7 +119,7 @@ def test_stale_token_rejected_before_new_copy(tmp_path):
 
 
 def test_file_freeze_and_native_uncertainty(tmp_path):
-    p = tmp_path/'source.cdxml';p.write_text(source());b = BatchBridge(tmp_path/'work')
+    p = tmp_path/'source.cdxml';p.write_text(source(),encoding='utf-8',newline='');b = BatchBridge(tmp_path/'work')
     export = b.export
     def fail(did,path,format,pixels=3200):
         if Path(path).name == 'figure.svg':raise RuntimeError('timeout')
@@ -127,24 +127,24 @@ def test_file_freeze_and_native_uncertainty(tmp_path):
     b.export = fail
     with pytest.raises(NativeUncertain):decorate_scope_file(b, str(p), str(tmp_path/'out'), GROUPS)
     assert len(b.managed) == 2 and not any(e[0] == 'close' for e in b.events)
-    assert (tmp_path/'out/source-input.cdxml').read_text() == source()
-    assert json.loads((tmp_path/'out/audit.json').read_text())['status'] == 'uncertain'
+    assert (tmp_path/'out/source-input.cdxml').read_text(encoding='utf-8') == source()
+    assert json.loads((tmp_path/'out/audit.json').read_text(encoding='utf-8'))['status'] == 'uncertain'
 
 
 def test_file_source_mutation_is_not_a_success(tmp_path):
-    p = tmp_path/'source.cdxml';p.write_text(source());b = BatchBridge(tmp_path/'work');export = b.export
+    p = tmp_path/'source.cdxml';p.write_text(source(),encoding='utf-8',newline='');b = BatchBridge(tmp_path/'work');export = b.export
     def change(did,path,format,pixels=3200):
-        if Path(path).name == 'figure.png':p.write_text(source()+'\n')
+        if Path(path).name == 'figure.png':p.write_text(source()+'\n',encoding='utf-8',newline='')
         return export(did,path,format,pixels)
     b.export = change
     with pytest.raises(ValueError, match='Source file'):decorate_scope_file(b, str(p), str(tmp_path/'out'), GROUPS)
-    assert json.loads((tmp_path/'out/audit.json').read_text())['status'] == 'failed'
+    assert json.loads((tmp_path/'out/audit.json').read_text(encoding='utf-8'))['status'] == 'failed'
 
 
 def test_uncertain_final_close_after_file_mutation_does_not_close_source(tmp_path):
-    p = tmp_path/'source.cdxml';p.write_text(source());b = BatchBridge(tmp_path/'work');export = b.export
+    p = tmp_path/'source.cdxml';p.write_text(source(),encoding='utf-8',newline='');b = BatchBridge(tmp_path/'work');export = b.export
     def change(did,path,format,pixels=3200):
-        if Path(path).name == 'figure.png':p.write_text(source()+'\n')
+        if Path(path).name == 'figure.png':p.write_text(source()+'\n',encoding='utf-8',newline='')
         return export(did,path,format,pixels)
     closes = []
     def uncertain_close(did):
@@ -153,7 +153,7 @@ def test_uncertain_final_close_after_file_mutation_does_not_close_source(tmp_pat
     b.export = change;b.close = uncertain_close
     with pytest.raises(NativeUncertain):decorate_scope_file(b, str(p), str(tmp_path/'out'), GROUPS)
     assert len(closes) == 1
-    assert json.loads((tmp_path/'out/audit.json').read_text())['status'] == 'uncertain'
+    assert json.loads((tmp_path/'out/audit.json').read_text(encoding='utf-8'))['status'] == 'uncertain'
 
 
 def test_old_atom_label_typography_and_new_label_alignment_are_preserved():
@@ -175,7 +175,7 @@ def test_render_side_effects_are_checked_after_final_export(tmp_path):
         return result
     b.export = change
     with pytest.raises(ValueError):decorate_scope_document(b,1,str(tmp_path/'out'),GROUPS,source_token(source()))
-    assert json.loads((tmp_path/'out/audit.json').read_text())['status'] == 'failed'
+    assert json.loads((tmp_path/'out/audit.json').read_text(encoding='utf-8'))['status'] == 'failed'
 
 
 def test_native_omits_default_black_and_inherited_frame_width():

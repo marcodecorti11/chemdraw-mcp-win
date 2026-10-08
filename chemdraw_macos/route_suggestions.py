@@ -205,7 +205,7 @@ def select_route(report,candidate_id,cdxml):
 @native_transaction
 def annotate_selected_route_document(bridge,document_id,output_dir,suggestions,candidate_id,pixels=3200):
     snapshot = bridge._new_path('.cdxml','backups'); _native(bridge.export,document_id,str(snapshot),'cdxml')
-    arrow = select_route(suggestions,candidate_id,snapshot.read_text())
+    arrow = select_route(suggestions,candidate_id,snapshot.read_text(encoding='utf-8'))
     result = ann.annotate_document(bridge,document_id,output_dir,[arrow],suggestions['source_token'],suggestions['request']['line_width'],pixels)
     _record_selection(result,suggestions,candidate_id,arrow)
     return result

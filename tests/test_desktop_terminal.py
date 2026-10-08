@@ -1,4 +1,5 @@
 """The graphical installation also supplies a self-contained terminal entry point."""
+import sys
 import os
 from pathlib import Path
 import plistlib
@@ -15,21 +16,22 @@ def app_fixture(tmp_path):
     runtime.parent.mkdir(parents=True)
     (app/'Contents/Info.plist').write_bytes(plistlib.dumps({
         'CFBundleIdentifier': 'org.glebo309.chemdraw-mcp.setup', 'CFBundleVersion': '13'}))
-    runtime.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+    runtime.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n',encoding='utf-8',newline='')
     runtime.chmod(0o700)
     return app
 
 
+@pytest.mark.skipif(sys.platform == 'win32', reason='macOS zsh terminal setup; Windows terminal access is .cmd launchers on the user PATH (test_windows_install)')
 def test_finish_installs_terminal_commands_without_python_or_uv(tmp_path):
     app = app_fixture(tmp_path)
     home = tmp_path/'user space'
     home.mkdir()
     rc = home/'.zshrc'
     original = '# My settings\nexport KEEP_ME=retained\n'
-    rc.write_text(original)
+    rc.write_text(original,encoding='utf-8',newline='')
     result = client_install.install_and_connect(app, ['bundle'], home=home)
-    assert rc.read_text().startswith(original)
-    assert any(Path(p).read_text() == original for p in result['backups'])
+    assert rc.read_text(encoding='utf-8').startswith(original)
+    assert any(Path(p).read_text(encoding='utf-8') == original for p in result['backups'])
     env = {**os.environ, 'ZDOTDIR': str(home), 'PATH': '/usr/bin:/bin'}
     cli = subprocess.run(['/bin/zsh', '-ic', 'chemdraw-mac identify --value "C C"'],
                          env=env, text=True, capture_output=True, check=True)
@@ -48,25 +50,26 @@ def test_failed_client_registration_rolls_back_terminal_changes(tmp_path):
     home = tmp_path/'user'
     codex = home/'.codex/config.toml'
     codex.parent.mkdir(parents=True)
-    codex.write_text('[mcp_servers.glecko_chemdraw]\ncommand="other"\n')
+    codex.write_text('[mcp_servers.glecko_chemdraw]\ncommand="other"\n',encoding='utf-8',newline='')
     rc = home/'.zshrc'
-    rc.write_text('# untouched\n')
+    rc.write_text('# untouched\n',encoding='utf-8',newline='')
     with pytest.raises(ValueError, match='already'):
         client_install.install_and_connect(app, ['codex'], home=home)
-    assert rc.read_text() == '# untouched\n'
+    assert rc.read_text(encoding='utf-8') == '# untouched\n'
     assert not (home/'Library/Application Support/ChemDraw MCP/bin/chemdraw-mac').exists()
 
 
+@pytest.mark.skipif(sys.platform == 'win32', reason='macOS ~/.zshrc handling; Windows has no shell rc file to protect (test_windows_install)')
 def test_symlink_shell_config_refused_before_client_writes(tmp_path):
     app = app_fixture(tmp_path)
     home = tmp_path/'user'
     home.mkdir()
     original = tmp_path/'my-shell-config'
-    original.write_text('# untouched\n')
+    original.write_text('# untouched\n',encoding='utf-8',newline='')
     (home/'.zshrc').symlink_to(original)
     with pytest.raises(ValueError, match='symbolic'):
         client_install.install_and_connect(app, ['codex'], home=home)
-    assert original.read_text() == '# untouched\n'
+    assert original.read_text(encoding='utf-8') == '# untouched\n'
     assert not (home/'.codex/config.toml').exists()
 
 

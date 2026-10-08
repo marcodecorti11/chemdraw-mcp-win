@@ -42,6 +42,12 @@ async def test_real_mcp_scratch(tmp_path, profile):
                 assert final['settings']['label_size_twentieth_pt']==280
                 out=tmp_path/'export';out.mkdir()
                 for fmt in ('cdxml','svg','pdf','png','cdx'):
+                    if fmt=='pdf' and sys.platform=='win32':
+                        # Windows ChemDraw has no PDF export: the refusal must be explicit and write nothing.
+                        refused=await session.call_tool('chemdraw_export',{'document_id':sid,'path':str(out/'methanol.pdf'),'format':'pdf'})
+                        assert refused.isError and 'PDF export is not available' in refused.content[0].text
+                        assert not (out/'methanol.pdf').exists()
+                        continue
                     result=await call('chemdraw_export',document_id=sid,path=str(out/('methanol.'+fmt)),format=fmt)
                     assert result['bytes']>0
                 native=ET.parse(out/'methanol.cdxml').getroot()
@@ -57,7 +63,7 @@ async def test_real_mcp_scratch(tmp_path, profile):
             after=await call('chemdraw_list_documents')
             assert after==baseline
             results['status']='pass'
-            (tmp_path/'live-report.json').write_text(json.dumps(results,indent=2))
+            (tmp_path/'live-report.json').write_text(json.dumps(results,indent=2),encoding='utf-8',newline='')
             print('LIVE_REPORT='+str(tmp_path/'live-report.json'))
 
 

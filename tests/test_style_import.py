@@ -54,7 +54,7 @@ def test_missing_custom_font_rejected_before_native_calls(tmp_path,monkeypatch):
 
 def test_xml_import_custom_preset_normalizes_and_respects_spacing(tmp_path):
     p=tmp_path/'template.cdxml'
-    p.write_text('<CDXML BondLength="22" LineWidth="1.2" BoldWidth="3" LabelSize="13" CaptionSize="12" LabelFont="3" CaptionFont="4" BondSpacing="15"><fonttable><font id="3" name="Arial"/><font id="4" name="Helvetica"/></fonttable><page/></CDXML>')
+    p.write_text('<CDXML BondLength="22" LineWidth="1.2" BoldWidth="3" LabelSize="13" CaptionSize="12" LabelFont="3" CaptionFont="4" BondSpacing="15"><fonttable><font id="3" name="Arial"/><font id="4" name="Helvetica"/></fonttable><page/></CDXML>',encoding='utf-8',newline='')
     r=inspect_style_file(str(p));s=r['preset']
     assert 'HashSpacing' in r['defaults_used']
     out,_=normalize_cdxml(SAMPLE,s);root=ET.fromstring(out)
@@ -73,5 +73,5 @@ def test_custom_unknown_nonfinite_and_absurd_values_rejected():
         with pytest.raises(ValueError):validate_style({**base,**change})
 
 def test_incomplete_style_does_not_guess_core_parameters(tmp_path):
-    p=tmp_path/'bad.cdxml';p.write_text('<CDXML/>')
+    p=tmp_path/'bad.cdxml';p.write_text('<CDXML/>',encoding='utf-8',newline='')
     with pytest.raises(ValueError):inspect_style_file(str(p))

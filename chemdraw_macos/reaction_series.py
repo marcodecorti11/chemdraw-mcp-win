@@ -361,33 +361,33 @@ def build_reaction_series(bridge,steps,output_dir,preset='house',pixels=3200,lay
             for c in parts:
                 smi=c['canonical_smiles']
                 if smi in native_by_smiles:continue
-                key=f'component-{len(native_by_smiles)+1}';seed=seeds/f'{key}.mol';seed.write_text(c['molblock'])
+                key=f'component-{len(native_by_smiles)+1}';seed=seeds/f'{key}.mol';seed.write_text(c['molblock'],encoding='utf-8',newline='')
                 if c['native_seed_format']=='cdxml':
-                    (seeds/f'{key}.cdxml').write_text(c['seed_cdxml'])
+                    (seeds/f'{key}.cdxml').write_text(c['seed_cdxml'],encoding='utf-8',newline='')
                     imported=_native(bridge.create,c['seed_cdxml'])
                 else:imported=_native(bridge.import_file,str(seed))
                 did=imported['document']['document_id'];owned.append(did)
                 snap=seeds/f'{key}-imported.cdxml';_native(bridge.export,did,str(snap),'cdxml')
-                if chemical_signature(snap.read_text())!=[smi]:raise ValueError('Native reaction component import changed identity')
+                if chemical_signature(snap.read_text(encoding='utf-8'))!=[smi]:raise ValueError('Native reaction component import changed identity')
                 _native(bridge.clean,did);snap=seeds/f'{key}-clean.cdxml';_native(bridge.export,did,str(snap),'cdxml')
-                if chemical_signature(snap.read_text())!=[smi]:raise ValueError('Native reaction component cleanup changed identity')
-                native_by_smiles[smi]=snap.read_text();_native(bridge.close,did);owned.remove(did)
-            composed,recipe=compose_series(native_by_smiles,prepared,preset,options);(out/'combined.cdxml').write_text(composed)
+                if chemical_signature(snap.read_text(encoding='utf-8'))!=[smi]:raise ValueError('Native reaction component cleanup changed identity')
+                native_by_smiles[smi]=snap.read_text(encoding='utf-8');_native(bridge.close,did);owned.remove(did)
+            composed,recipe=compose_series(native_by_smiles,prepared,preset,options);(out/'combined.cdxml').write_text(composed,encoding='utf-8',newline='')
             result=_native(bridge.create,composed);intermediate=result['document']['document_id'];owned.append(intermediate)
-            snap=out/'combined-native.cdxml';_native(bridge.export,intermediate,str(snap),'cdxml');native=snap.read_text();_verify(composed,native);verify_custom_style(composed,native,preset)
-            recipe=remap_series(recipe,remap_ids(composed,native));arranged,plan=arrange_series(native,recipe);(out/'planned.cdxml').write_text(arranged);_write_json(out/'recipe.json',plan)
+            snap=out/'combined-native.cdxml';_native(bridge.export,intermediate,str(snap),'cdxml');native=snap.read_text(encoding='utf-8');_verify(composed,native);verify_custom_style(composed,native,preset)
+            recipe=remap_series(recipe,remap_ids(composed,native));arranged,plan=arrange_series(native,recipe);(out/'planned.cdxml').write_text(arranged,encoding='utf-8',newline='');_write_json(out/'recipe.json',plan)
             result=_native(bridge.create,arranged);final_id=result['document']['document_id'];owned.append(final_id)
             for fmt in ('svg','png','cdxml'):_native(bridge.export,final_id,str(out/f'figure.{fmt}'),fmt,pixels)
-            final=(out/'figure.cdxml').read_text();verification=verify_series(arranged,final,plan);verify_custom_style(arranged,final,preset)
+            final=(out/'figure.cdxml').read_text(encoding='utf-8');verification=verify_series(arranged,final,plan);verify_custom_style(arranged,final,preset)
             stable=out/'post-export.cdxml';_native(bridge.export,final_id,str(stable),'cdxml')
-            if content_fingerprint(final)!=content_fingerprint(stable.read_text()):raise ValueError('Native working content changed during export')
+            if content_fingerprint(final)!=content_fingerprint(stable.read_text(encoding='utf-8')):raise ValueError('Native working content changed during export')
             _native(bridge.close,intermediate);owned.remove(intermediate)
             if [d for d in _native(bridge.documents)['documents'] if d['document_id']!=final_id]!=baseline['documents']:raise ValueError('Pre-existing document inventory changed')
             for did,original in content.items():
                 if _document_content(bridge,did)!=original:raise ValueError('Pre-existing document content changed')
             audit.update(status='checks_passed',verification=verification);audit['checks'].update(verification['checks'],native_component_import_identity=True,native_component_cleanup_identity=True,preexisting_documents_unchanged=True)
             _write_json(out/'audit.json',audit)
-            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Native reaction series</title><h1>Explicit reaction series</h1><p>Caller-supplied participants and coefficients. Not automatically balanced or chemically certified. Visual review required.</p><img style="max-width:100%;max-height:85vh" src="figure.png"><p><a href="figure.cdxml">Editable ChemDraw</a> <a href="figure.svg">SVG</a> <a href="audit.json">Audit</a></p>')
+            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Native reaction series</title><h1>Explicit reaction series</h1><p>Caller-supplied participants and coefficients. Not automatically balanced or chemically certified. Visual review required.</p><img style="max-width:100%;max-height:85vh" src="figure.png"><p><a href="figure.cdxml">Editable ChemDraw</a> <a href="figure.svg">SVG</a> <a href="audit.json">Audit</a></p>',encoding='utf-8',newline='')
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),owned_document_ids=owned,recovery='No retry or automatic close after uncertain native operation');_write_json(out/'audit.json',audit);raise

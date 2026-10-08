@@ -114,7 +114,7 @@ class ReactionBridge:
     def import_file(self,path):self.events.append(('import',path));return self.create(ETHANOL)
     def clean(self,did):self.events.append(('clean',did))
     def export(self,did,path,fmt,pixels=3200):
-        self.events.append(('export',did,fmt));Path(path).write_text(self.docs[did] if fmt=='cdxml' else 'preview')
+        self.events.append(('export',did,fmt));Path(path).write_text(self.docs[did] if fmt=='cdxml' else 'preview',encoding='utf-8',newline='')
     def close(self,did):
         assert did!=1;self.events.append(('close',did));del self.docs[did]
 
@@ -141,7 +141,7 @@ def test_uncertain_native_call_not_retried_or_closed(tmp_path,operation):
     assert len(triggered)==1
     assert not any(e[0]=='close' for e in b.events)
     if (tmp_path/'out'/'audit.json').exists():
-        assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='uncertain'
+        assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='uncertain'
 
 
 def test_uncertain_final_export_stops_without_closing_any_more_documents(tmp_path):
@@ -156,7 +156,7 @@ def test_uncertain_final_export_stops_without_closing_any_more_documents(tmp_pat
         build_reaction(b,[item('r')],[item('p')],str(tmp_path/'out'))
     assert b.events==events_at_failure
     assert len(b.docs)==3  # source, owned composition and uncertain final copy
-    assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='uncertain'
+    assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='uncertain'
 
 
 def test_changed_preexisting_unsaved_content_is_not_certified(tmp_path):
@@ -169,7 +169,7 @@ def test_changed_preexisting_unsaved_content_is_not_certified(tmp_path):
     with pytest.raises(ValueError,match='Pre-existing document content'):
         build_reaction(b,[item('r')],[item('p')],str(tmp_path/'out'))
     assert set(b.docs)=={1}
-    assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='failed'
+    assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='failed'
 
 
 def test_native_ink_overflow_and_displaced_caption_fail_verification():
@@ -188,7 +188,7 @@ def test_reaction_uses_validated_custom_style(tmp_path,monkeypatch):
     b=ReactionBridge(tmp_path/'work')
     result=build_reaction(b,[item('r')],[item('p')],str(tmp_path/'out'),preset=spec)
     assert result['audit']['verification']['median_bond_lengths_pt']==pytest.approx([20,20],abs=.03)
-    root=ET.fromstring((tmp_path/'out'/'figure.cdxml').read_text())
+    root=ET.fromstring((tmp_path/'out'/'figure.cdxml').read_text(encoding='utf-8'))
     assert float(root.get('LineWidth'))==1.8
 
 

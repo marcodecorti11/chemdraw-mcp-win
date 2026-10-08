@@ -18,7 +18,7 @@ def test_native_changed_charge_background_rejected():
 
 def test_deleted_source_after_export_marks_audit_failed(tmp_path):
     source = tmp_path / 'source.cdxml'
-    source.write_text(SOURCE)
+    source.write_text(SOURCE,encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path / 'work')
     original = bridge.export
     def export(did, path, format, pixels=3200):
@@ -29,7 +29,7 @@ def test_deleted_source_after_export_marks_audit_failed(tmp_path):
     bridge.export = export
     with pytest.raises(ValueError, match='Source file'):
         annotate_file(bridge, source, str(tmp_path / 'out'), ARROWS)
-    audit = json.loads((tmp_path / 'out' / 'audit.json').read_text())
+    audit = json.loads((tmp_path / 'out' / 'audit.json').read_text(encoding='utf-8'))
     assert audit['status'] == 'failed'
     assert audit['checks']['source_file_unchanged'] is False
     assert not bridge.managed

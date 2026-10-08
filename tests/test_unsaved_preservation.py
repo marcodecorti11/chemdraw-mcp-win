@@ -24,7 +24,7 @@ def test_untitled_preservation_reads_native_api_without_saving(tmp_path, monkeyp
     monkeypatch.setattr(addin, 'get_backend', lambda b: SimpleNamespace(read=read))
     before = _document_content(bridge, 42)
     assert calls == [42]
-    assert (tmp_path/'recovery.cdxml').read_text() == content
+    assert (tmp_path/'recovery.cdxml').read_text(encoding='utf-8') == content
     assert _document_content(bridge, 42) == before
     content = content.replace('Unsaved content', 'Changed content')
     assert _document_content(bridge, 42) != before

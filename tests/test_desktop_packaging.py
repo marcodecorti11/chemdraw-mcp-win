@@ -1,4 +1,5 @@
 """Desktop installers must tolerate extractors which do not preserve symlinks."""
+import sys
 import importlib.util
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import zipfile
 import pytest
 
 
+@pytest.mark.skipif(sys.platform == 'win32', reason='macOS app-bundle staging with dylib/directory symlinks; Windows packages a PyInstaller onedir (test_windows_install)')
 def test_runtime_stage_materializes_library_and_directory_links(tmp_path):
     spec = importlib.util.spec_from_file_location('desktop_builder', Path(__file__).parents[1]/'scripts/build_desktop.py')
     builder = importlib.util.module_from_spec(spec)
@@ -62,18 +64,18 @@ def test_disk_image_stage_includes_offline_start_here_beside_app(tmp_path):
     spec.loader.exec_module(builder)
     app = tmp_path/'source'/'ChemDraw MCP.app'
     app.mkdir(parents=True)
-    (app/'fixture').write_text('app contents')
+    (app/'fixture').write_text('app contents',encoding='utf-8',newline='')
     stage = tmp_path/'installer'
     builder.stage_installer(app, stage)
-    assert (stage/'ChemDraw MCP.app'/'fixture').read_text() == 'app contents'
-    guide = (stage/'Start Here.html').read_text()
+    assert (stage/'ChemDraw MCP.app'/'fixture').read_text(encoding='utf-8') == 'app contents'
+    guide = (stage/'Start Here.html').read_text(encoding='utf-8')
     for instruction in ('Privacy &amp; Security', 'Open Anyway', 'Automation',
                         'not notarized', 'github.com/glebo309/chemdraw-mcp-macos',
                         'support.apple.com', 'Double-click'):
         assert instruction in guide
     assert '<script' not in guide and '<iframe' not in guide
     assert 'src="http' not in guide and '@import' not in guide
-    assert 'stage_installer(app, installer_stage)' in Path(builder.__file__).read_text()
+    assert 'stage_installer(app, installer_stage)' in Path(builder.__file__).read_text(encoding='utf-8')
 
 
 def test_start_here_bundles_real_screenshot_and_numbered_highlights(tmp_path):
@@ -84,7 +86,7 @@ def test_start_here_bundles_real_screenshot_and_numbered_highlights(tmp_path):
     app.mkdir(parents=True)
     stage = tmp_path/'installer'
     builder.stage_installer(app, stage)
-    guide = (stage/'Start Here.html').read_text()
+    guide = (stage/'Start Here.html').read_text(encoding='utf-8')
     screenshot = stage/'Start Here assets/macos-open-anyway.png'
     assert screenshot.is_file()
     assert screenshot.read_bytes() == (builder.ROOT/'packaging/Start Here assets/macos-open-anyway.png').read_bytes()
@@ -97,10 +99,10 @@ def test_start_here_bundles_real_screenshot_and_numbered_highlights(tmp_path):
 def test_speed_candidate_package_versions_are_consistent():
     import tomllib
     root = Path(__file__).parents[1]
-    version = tomllib.loads((root / 'pyproject.toml').read_text())['project']['version']
+    version = tomllib.loads((root / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     assert version == '0.10.0rc22'
-    build = (root / 'scripts/build_desktop.py').read_text()
+    build = (root / 'scripts/build_desktop.py').read_text(encoding='utf-8')
     assert "'CFBundleVersion': '22'" in build
     assert "extension_manifest('0.10.0-rc.22', arch)" in build
-    lock = tomllib.loads((root / 'uv.lock').read_text())
+    lock = tomllib.loads((root / 'uv.lock').read_text(encoding='utf-8'))
     assert next(p['version'] for p in lock['package'] if p['name'] == 'chemdraw-mcp-macos') == version

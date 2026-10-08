@@ -11,6 +11,7 @@ import sys
 from defusedxml import ElementTree as SafeET
 
 MAX_SVG_BYTES = 10_000_000
+WINDOWS = sys.platform == 'win32'
 _NS = 'http://www.w3.org/2000/svg'
 _TAGS = {'svg', 'g', 'defs', 'clipPath', 'path', 'text', 'tspan', 'rect',
          'circle', 'ellipse', 'line', 'polyline', 'polygon'}
@@ -23,6 +24,13 @@ _ATTRS = {'id', 'version', 'width', 'height', 'viewBox', 'preserveAspectRatio',
           'font-family', 'font-size', 'font-style', 'font-weight', 'text-anchor',
           'text-decoration', 'style'}
 _LOCAL_URL = re.compile(r'url\(#([A-Za-z0-9_][A-Za-z0-9_.:-]*)\)\Z')
+
+
+def _windows_vertical_font(name, value):
+    # Windows names vertical CJK font variants '@Family' and ChemDraw writes them as
+    # font-family (observed: "@MS Gothic"). A plain name only; no CSS syntax anywhere.
+    return (WINDOWS and name == 'font-family'
+            and re.fullmatch(r'@[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}', value) is not None)
 
 
 def _dimension(value):
@@ -75,7 +83,7 @@ def _validate(svg_text, pixels):
                 if name not in ('fill', 'stroke', 'clip-path') or reference is None:
                     raise ValueError('SVG resource references must be local fragment URLs')
                 references.append(reference[1])
-            if '\\' in value or '@' in value:
+            if '\\' in value or ('@' in value and not _windows_vertical_font(name, value)):
                 raise ValueError('Escaped CSS and external resource syntax are unsupported')
     if any(identifiers[reference] != 1 for reference in references):
         raise ValueError('SVG local resource reference must identify exactly one existing object')
@@ -97,9 +105,17 @@ def rasterize_svg(svg_text: str, pixels: int = 3200, *, background: str | None =
         import resvg_py
     except ImportError as exc:
         raise RuntimeError('PNG rasterization requires resvg-py; no renderer fallback is used') from exc
+    if WINDOWS:
+        # Windows ChemDraw may measure with another face of the family (or a GDI substitute)
+        # than resvg would pick; use the face that reproduces ChemDraw's own word positions.
+        from . import native_faces
+        svg_text = native_faces.match_native_faces(svg_text)
+        fonts = native_faces.resvg_font_options()  # registered per-user fonts, independent of env
+    else:
+        fonts = {}
     png = resvg_py.svg_to_bytes(svg_string=svg_text, width=pixels, height=pixels,
                                 background=background, dpi=96.0, skip_system_fonts=False,
-                                log_information=False)
+                                log_information=False, **fonts)
     # resvg fits proportionally inside the requested square. Check the actual
     # encoded dimensions and alpha format, rather than asserting the request won.
     if (not isinstance(png, bytes) or len(png) < 29 or png[:8] != b'\x89PNG\r\n\x1a\n'

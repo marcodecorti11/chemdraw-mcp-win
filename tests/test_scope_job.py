@@ -129,7 +129,7 @@ def test_job_uncertainty_never_closes_or_retries_owned_documents(tmp_path,monkey
     monkeypatch.setattr('chemdraw_macos.scope_job.decorate_scope_document',fail)
     with pytest.raises(NativeUncertain):build_scope_job(b,small_job(),str(tmp_path/'job'))
     assert not any(e[0]=='close' for e in b.events)
-    assert json.loads((tmp_path/'job/audit.json').read_text())['status']=='uncertain'
+    assert json.loads((tmp_path/'job/audit.json').read_text(encoding='utf-8'))['status']=='uncertain'
 
 
 def test_layout_overrides_are_validated_and_used():

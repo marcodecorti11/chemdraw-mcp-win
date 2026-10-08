@@ -59,13 +59,13 @@ def test_full_append_and_export_retains_stale_linked_name(tmp_path,monkeypatch):
             after=ET.tostring(root,encoding='unicode')
             checks=verify_append(self.current,after,text,exact_coordinates=True)
             self.current=after
-            path=tmp_path/'native.cdxml';path.write_text(after)
+            path=tmp_path/'native.cdxml';path.write_text(after,encoding='utf-8',newline='')
             return {'document':{'document_id':42},'after_snapshot':str(path),'checks':checks,'status':'completed'}
     class Bridge:
         def _id(self,did):return did
         def documents(self):return {'documents':[{'document_id':42}]}
         def export(self,did,path,fmt):
-            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>')
+            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>',encoding='utf-8',newline='')
     backend=Backend();monkeypatch.setattr(api_drawing,'get_backend',lambda bridge:backend)
     result=api_drawing.run_api_drawing(Bridge(),{'exports':'full','structures':[{'compound_id':'new','label':'New','smiles':'CCO'}]},tmp_path/'out',42)
     assert result['status']=='completed'
@@ -125,8 +125,8 @@ def test_front_door_uncertainty_includes_retained_document_and_artifacts(tmp_pat
     out=tmp_path/'out'
     def failed(*a,**kw):
         out.mkdir();(out/'figure').mkdir()
-        (out/'figure/figure.cdxml').write_text(EMPTY)
-        (out/'audit.json').write_text(json.dumps({'working_document_id':456,'checks':{'native_layout':True}}))
+        (out/'figure/figure.cdxml').write_text(EMPTY,encoding='utf-8',newline='')
+        (out/'audit.json').write_text(json.dumps({'working_document_id':456,'checks':{'native_layout':True}}),encoding='utf-8',newline='')
         raise NativeUncertain('preservation read failed')
     monkeypatch.setattr(reaction_batch,'run_reaction_batch',failed)
     result=harness.run_drawing(object(),{'molecules':[{'format':'smiles','value':'CCO'}],
@@ -140,8 +140,8 @@ def test_cli_draw_returns_same_uncertain_recovery_evidence(tmp_path,monkeypatch,
     from chemdraw_macos import cli
     from chemdraw_macos.batch import NativeUncertain
     out=tmp_path/'out';out.mkdir()
-    (out/'audit.json').write_text(json.dumps({'working_document_id':456}))
-    manifest=tmp_path/'request.json';manifest.write_text(json.dumps({'structures':[]}))
+    (out/'audit.json').write_text(json.dumps({'working_document_id':456}),encoding='utf-8',newline='')
+    manifest=tmp_path/'request.json';manifest.write_text(json.dumps({'structures':[]}),encoding='utf-8',newline='')
     monkeypatch.setattr(cli,'Bridge',lambda:object())
     def failed(*a,**kw):raise NativeUncertain('read failed')
     monkeypatch.setattr(cli,'draw_structures',failed)

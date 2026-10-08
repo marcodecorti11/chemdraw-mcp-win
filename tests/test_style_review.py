@@ -21,7 +21,7 @@ def xml_style(fonttables):
 ])
 def test_ambiguous_xml_font_ownership_is_rejected(tmp_path, fonttables):
     source = tmp_path / 'ambiguous.cdxml'
-    source.write_text(xml_style(fonttables))
+    source.write_text(xml_style(fonttables),encoding='utf-8',newline='')
     with pytest.raises(ValueError, match='font'):
         inspect_style_file(str(source))
 

@@ -93,12 +93,12 @@ def test_actual_evenodd_hole_stays_transparent_and_shadow_has_alpha():
 
 def test_worker_preserves_source_and_refuses_overwrite(tmp_path):
     pytest.importorskip('resvg_py')
-    svg = tmp_path / 'source.svg'; svg.write_text(SVG)
+    svg = tmp_path / 'source.svg'; svg.write_text(SVG,encoding='utf-8',newline='')
     png = tmp_path / 'image.png'
     command = [sys.executable, '-m', 'chemdraw_macos.raster', str(svg), str(png), '512']
     result = subprocess.run(command, capture_output=True, timeout=20)
     assert result.returncode == 0, result.stderr
-    assert png.read_bytes().startswith(b'\x89PNG') and svg.read_text() == SVG
+    assert png.read_bytes().startswith(b'\x89PNG') and svg.read_text(encoding='utf-8') == SVG
     original = png.read_bytes()
     assert subprocess.run(command, capture_output=True, timeout=20).returncode != 0
     assert png.read_bytes() == original

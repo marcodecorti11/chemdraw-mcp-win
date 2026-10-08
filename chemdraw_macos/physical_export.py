@@ -5,16 +5,47 @@ import copy
 import re
 from pathlib import Path
 import struct
+import sys
 import xml.etree.ElementTree as ET
 import zlib
 
 from .raster import _validate
 from .native_lock import native_transaction
 
+WINDOWS = sys.platform == 'win32'
+_MATRIX = re.compile(r'matrix\(([^)]+)\)')
+
+
+def native_units_per_point(root):
+    """SVG units per drawing point, from ChemDraw's own element transforms.
+
+    ChemDraw draws in 20 internal units per point and scales every element with one matrix.
+    On macOS that matrix is 0.05 (one SVG unit per point). Windows ChemDraw writes display
+    pixels instead (observed matrix 0.133333, i.e. 192 DPI at 200 % scaling), so the unit
+    depends on the display and is read from the transforms rather than assumed.
+    """
+    if not WINDOWS:
+        return 1.0
+    scales = set()
+    for element in root.iter():
+        match = _MATRIX.fullmatch((element.get('transform') or '').strip())
+        if not match:
+            continue
+        values = [float(v) for v in match[1].replace(',', ' ').split()]
+        if len(values) != 6:
+            raise ValueError('Unsupported native SVG transform; cannot establish the physical scale')
+        a, b, c, d = values[:4]
+        scales.add(math.sqrt(abs(a * d - b * c)))
+    if not scales or max(scales) - min(scales) > 1e-6 or min(scales) <= 0:
+        raise ValueError('Cannot establish one native SVG scale; the physical size would be wrong')
+    dpi = scales.pop() * 20 * 72
+    return (round(dpi) if abs(dpi - round(dpi)) < .01 else dpi) / 72
+
 
 def physical_svg(svg):
-    # ChemDraw's native SVG uses one drawing point per viewBox unit, although
-    # its root dimensions say px. Retain every path, glyph and transform.
+    # ChemDraw's native SVG uses one drawing point per viewBox unit on macOS, although
+    # its root dimensions say px; Windows uses display pixels (native_units_per_point).
+    # Retain every path, glyph and transform.
     _validate(svg, 256)
     root = ET.fromstring(svg)
     width = float(root.get('width').removesuffix('px'))
@@ -22,6 +53,8 @@ def physical_svg(svg):
     view = list(map(float, root.get('viewBox', f'0 0 {width} {height}').split()))
     if view[2:] != [width, height]:
         raise ValueError('Native SVG coordinates do not have the supported 1:1 point scale')
+    scale = native_units_per_point(root)
+    width, height = width / scale, height / scale
     root.set('width', f'{width:g}pt'); root.set('height', f'{height:g}pt')
     root.set('viewBox', ' '.join(f'{v:g}' for v in view))
     return ET.tostring(root, encoding='unicode'), (width, height)
@@ -34,12 +67,18 @@ def validate_dpi(dpi):
 
 def physical_png(svg, dpi=600):
     validate_dpi(dpi)
+    fonts = {}
+    if WINDOWS:
+        # Render text with the faces Windows ChemDraw measured (native_faces).
+        from . import native_faces
+        svg = native_faces.match_native_faces(svg)
+        fonts = native_faces.resvg_font_options()
     physical, (w, h) = physical_svg(svg)
     if max(w, h)*dpi/72 > 16000 or w*h*(dpi/72)**2 > 64_000_000:
         raise ValueError('Export exceeds 64 megapixels or 16000 pixels per side; use a lower DPI or SVG')
     import resvg_py
     png = resvg_py.svg_to_bytes(svg_string=physical, dpi=float(dpi), background=None,
-                                skip_system_fonts=False, log_information=False)
+                                skip_system_fonts=False, log_information=False, **fonts)
     if (not isinstance(png, bytes) or len(png) < 33 or png[:8] != b'\x89PNG\r\n\x1a\n'
             or png[24:26] != b'\x08\x06'):
         raise RuntimeError('Rasterizer did not produce RGBA PNG')
@@ -72,12 +111,14 @@ def page_svgs(svg,cdxml):
         raise ValueError('Page export supports 1 through 20 vertical drawing sheets')
     if count==1:return [svg]
     _validate(svg,256);root=ET.fromstring(svg);offsets=set()
+    scale=native_units_per_point(root)
     for path in root.iter('{http://www.w3.org/2000/svg}path'):
         value=path.get('transform','')
         match=re.fullmatch(r'matrix\(([^)]+)\)',value)
         if not match:continue
         matrix=list(map(float,match[1].replace(',',' ').split()))
-        if len(matrix)!=6 or matrix[:4]!=[.05,0,0,.05]:
+        expected=[.05,0,0,.05] if scale==1 else [scale/20,0,0,scale/20]
+        if len(matrix)!=6 or (matrix[:4]!=expected if scale==1 else any(abs(v-w)>1e-6 for v,w in zip(matrix[:4],expected))):
             raise ValueError('Unsupported native SVG page-coordinate transform')
         offsets.add(tuple(matrix[4:]))
     if len(offsets)!=1:raise ValueError('Cannot establish one native page-coordinate origin')
@@ -85,8 +126,12 @@ def page_svgs(svg,cdxml):
     result=[]
     for index in range(count):
         sheet=copy.deepcopy(root)
-        sheet.set('width',f'{extent.width:g}px');sheet.set('height',f'{height:g}px')
-        sheet.set('viewBox',f'{extent.left+dx:g} {extent.top+dy+index*height:g} {extent.width:g} {height:g}')
+        if scale==1:
+            sheet.set('width',f'{extent.width:g}px');sheet.set('height',f'{height:g}px')
+            sheet.set('viewBox',f'{extent.left+dx:g} {extent.top+dy+index*height:g} {extent.width:g} {height:g}')
+        else:  # Windows: page geometry in points, SVG coordinates in display pixels
+            sheet.set('width',f'{extent.width*scale:g}px');sheet.set('height',f'{height*scale:g}px')
+            sheet.set('viewBox',f'{extent.left*scale+dx:g} {(extent.top+index*height)*scale+dy:g} {extent.width*scale:g} {height*scale:g}')
         result.append(ET.tostring(sheet,encoding='unicode'))
     return result
 
@@ -98,6 +143,9 @@ def export_figure(bridge, document_id, output_dir, dpi=600, include_pdf=False):
     from .api_drawing import verify_export_snapshot
     validate_dpi(dpi)
     if type(include_pdf) is not bool:raise ValueError('include_pdf must be a boolean')
+    if include_pdf:
+        from .core import require_export_formats
+        require_export_formats(bridge,['pdf'])
     out = Path(output_dir).expanduser()
     if not out.is_absolute() or not out.parent.is_dir():
         raise ValueError('Output must be absolute with an existing parent')
@@ -114,19 +162,19 @@ def export_figure(bridge, document_id, output_dir, dpi=600, include_pdf=False):
     else:read=lambda:backend.read(did)
     before = read()
     out.mkdir()
-    (out/'figure.cdxml').write_text(before['cdxml'])
+    (out/'figure.cdxml').write_text(before['cdxml'],encoding='utf-8',newline='')
     bridge.export(did, str(out/'native.svg'), 'svg')
     after = read()
     verify_export_snapshot(before['cdxml'], after['cdxml'])
-    native = (out/'native.svg').read_text()
+    native = (out/'native.svg').read_text(encoding='utf-8')
     svg, size = physical_svg(native)
-    (out/'figure.svg').write_text(svg)
+    (out/'figure.svg').write_text(svg,encoding='utf-8',newline='')
     pages=page_svgs(native,before['cdxml'])
     page_artifacts=[]
     for index,page in enumerate(pages,1):
         stem='figure' if len(pages)==1 else f'page-{index:02}'
         (out/f'{stem}.png').write_bytes(physical_png(page,dpi))
-        (out/f'{stem}.svg').write_text(physical_svg(page)[0])
+        (out/f'{stem}.svg').write_text(physical_svg(page)[0],encoding='utf-8',newline='')
         page_artifacts.append({'page':index,'svg':str(out/f'{stem}.svg'),'png':str(out/f'{stem}.png')})
     if include_pdf:
         # Export a named private copy, so an untitled source never acquires a
@@ -146,5 +194,5 @@ def export_figure(bridge, document_id, output_dir, dpi=600, include_pdf=False):
               'note': 'No fit-to-width or molecule resizing. Insert at original size in your document. Visual review required.'}
     if include_pdf:result['artifacts']['pdf']=str(out/'figure.pdf')
     if len(pages)==1:result['artifacts']['png']=str(out/'figure.png')
-    (out/'export.json').write_text(json.dumps(result, indent=2)+'\n')
+    (out/'export.json').write_text(json.dumps(result, indent=2)+'\n',encoding='utf-8',newline='')
     return result

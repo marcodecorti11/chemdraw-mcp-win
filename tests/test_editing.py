@@ -151,11 +151,11 @@ def test_analysis_includes_editable_selection_and_token(tmp_path):
 
 def test_cli_file_edit_remaps_native_atom_and_caption_ids(tmp_path,monkeypatch,capsys):
     from chemdraw_macos.cli import main
-    source=tmp_path/'ethanol.cdxml';source.write_text(ETHANOL)
-    recipe=tmp_path/'recipe.json';recipe.write_text(json.dumps({'schema_version':1,'operations':SWAP,'captions':CAPTION}))
+    source=tmp_path/'ethanol.cdxml';source.write_text(ETHANOL,encoding='utf-8',newline='')
+    recipe=tmp_path/'recipe.json';recipe.write_text(json.dumps({'schema_version':1,'operations':SWAP,'captions':CAPTION}),encoding='utf-8',newline='')
     bridge=FakeBridge(tmp_path/'work')
     def imported(path):
-        root=ET.fromstring(source.read_text())
+        root=ET.fromstring(source.read_text(encoding='utf-8'))
         for e in root.find('page').iter():
             for k in ('id','B','E'):
                 if e.get(k):e.set(k,str(int(e.get(k))+100))
@@ -168,7 +168,7 @@ def test_cli_file_edit_remaps_native_atom_and_caption_ids(tmp_path,monkeypatch,c
 
 
 def test_included_aromatic_analogue_fixture():
-    source=(Path(__file__).parents[1]/'examples/chlorobenzoic-acid.cdxml').read_text()
+    source=(Path(__file__).parents[1]/'examples/chlorobenzoic-acid.cdxml').read_text(encoding='utf-8')
     text,diff=plan_edit(source,[{'kind':'atom','id':'8','element':'Br','hydrogens':0}],{'30':'4-Bromobenzoic acid'})
     assert diff['before_smiles']==['O=C(O)c1ccc(Cl)cc1']
     assert diff['after_smiles']==['O=C(O)c1ccc(Br)cc1']

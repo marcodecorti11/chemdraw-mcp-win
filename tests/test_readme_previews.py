@@ -6,7 +6,7 @@ def test_white_preview_preserves_all_native_drawing_elements():
     from scripts.build_readme_previews import white_preview
     assets=Path(__file__).parents[1]/'assets'
     for source in assets.glob('*.svg'):
-        original=source.read_text();preview=white_preview(original)
+        original=source.read_text(encoding='utf-8');preview=white_preview(original)
         old=ET.fromstring(original);new=ET.fromstring(preview)
         background=new[0]
         assert background.tag=='{http://www.w3.org/2000/svg}rect'

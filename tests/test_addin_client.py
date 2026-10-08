@@ -10,7 +10,7 @@ import pytest
 def test_addin_read_failures_and_status(scenario):
     node = shutil.which('node')
     if not node: pytest.skip('Node required for add-in protocol tests')
-    source = Path('chemdraw_macos/addin_client.js').read_text()
+    source = Path('chemdraw_macos/addin_client.js').read_text(encoding='utf-8')
     harness = r'''
 const assert = require('node:assert/strict');
 const vm = require('node:vm');

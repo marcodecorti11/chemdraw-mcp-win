@@ -40,15 +40,15 @@ def test_untitled_read_and_analysis_do_not_assign_filename(tmp_path):
 def test_native_cdx_append_moves_only_new_objects_and_undo_restores(tmp_path):
     from chemdraw_macos.shared import clipboard, plan_append, verify_append
     b=Bridge(); baseline=b.documents()
-    target=b.create(SOURCE.read_text())['document']['document_id']
+    target=b.create(SOURCE.read_text(encoding='utf-8'))['document']['document_id']
     cdx=tmp_path/'payload.cdx';b.export(target,str(cdx),'cdx')
     # Native CDX export normalizes print metadata. Capture the actual pre-paste
     # baseline after export so Undo is tested independently of that save effect.
     before=clipboard(b,target)['cdxml']
-    (tmp_path/'before.cdxml').write_text(before)
+    (tmp_path/'before.cdxml').write_text(before,encoding='utf-8',newline='')
     plan=plan_append(before,before)
     result=clipboard(b,target,cdx=str(cdx),placement=plan,expected=before)
-    (tmp_path/'after.cdxml').write_text(result['cdxml'])
+    (tmp_path/'after.cdxml').write_text(result['cdxml'],encoding='utf-8',newline='')
     assert result['clipboard_restored']
     assert result['document_id']==target
     assert verify_append(before,result['cdxml'],before)['existing_content_preserved']
@@ -60,7 +60,7 @@ def test_native_cdx_append_moves_only_new_objects_and_undo_restores(tmp_path):
     added=_union([bounds(e) for e in validate_cdxml(result['cdxml']).find('page') if e.get('id') not in old])
     assert abs(added.left-plan['left'])<=1 and abs(added.top-plan['top'])<=1
     restored=clipboard(b,target,undo_steps=result['undo_steps'])
-    (tmp_path/'restored.cdxml').write_text(restored['cdxml'])
+    (tmp_path/'restored.cdxml').write_text(restored['cdxml'],encoding='utf-8',newline='')
     from chemdraw_macos.shared import fingerprint
     assert fingerprint(before)==fingerprint(restored['cdxml'])
     b.close(target)
@@ -73,7 +73,7 @@ async def test_actual_mcp_adds_to_same_document_twice(tmp_path):
     from mcp.client.stdio import stdio_client
     from chemdraw_macos.shared import clipboard, verify_append
     b=Bridge(); baseline=b.documents()
-    target=b.create(SOURCE.read_text())['document']['document_id']
+    target=b.create(SOURCE.read_text(encoding='utf-8'))['document']['document_id']
     params=StdioServerParameters(command=sys.executable,args=['-m','chemdraw_macos.server','--profile','drawing'],env=dict(os.environ))
     async with stdio_client(params) as (read,write):
         async with ClientSession(read,write) as session:
@@ -88,7 +88,7 @@ async def test_actual_mcp_adds_to_same_document_twice(tmp_path):
                 assert data['status']=='completed',data
                 assert data['document']['document_id']==target
                 after=clipboard(b,target)['cdxml']
-                assert verify_append(before,after,Path(data['artifacts']['cdxml']).read_text())['existing_content_preserved']
+                assert verify_append(before,after,Path(data['artifacts']['cdxml']).read_text(encoding='utf-8'))['existing_content_preserved']
                 for fmt in ('cdxml','svg','png'):assert Path(data['artifacts'][fmt]).stat().st_size>100
                 assert {d['document_id'] for d in b.documents()['documents']}=={target,*[d['document_id'] for d in baseline['documents']]}
     b.close(target)
@@ -100,7 +100,7 @@ async def test_actual_advanced_mcp_scope_keeps_target_and_closes_generated_final
     from mcp.client.stdio import stdio_client
     from chemdraw_macos.shared import clipboard,verify_append
     b=Bridge();baseline=b.documents()
-    target=b.create(SOURCE.read_text())['document']['document_id']
+    target=b.create(SOURCE.read_text(encoding='utf-8'))['document']['document_id']
     before=clipboard(b,target)['cdxml']
     params=StdioServerParameters(command=sys.executable,args=['-m','chemdraw_macos.server','--profile','full'],env=dict(os.environ))
     async with stdio_client(params) as (read,write):
@@ -116,6 +116,6 @@ async def test_actual_advanced_mcp_scope_keeps_target_and_closes_generated_final
             assert data['status']=='completed',data
             assert data['document']['document_id']==target
             after=clipboard(b,target)['cdxml']
-            assert verify_append(before,after,Path(data['artifacts']['cdxml']).read_text())['existing_content_preserved']
+            assert verify_append(before,after,Path(data['artifacts']['cdxml']).read_text(encoding='utf-8'))['existing_content_preserved']
             assert {d['document_id'] for d in b.documents()['documents']}=={target,*[d['document_id'] for d in baseline['documents']]}
     b.close(target)

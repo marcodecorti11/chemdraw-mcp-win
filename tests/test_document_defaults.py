@@ -44,7 +44,7 @@ def test_empty_defaults_failure_is_uncertain_not_retried():
 
 
 def test_empty_defaults_refuse_native_object_race_before_setters():
-    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text()
+    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     branch=script.split('operation is "empty_document_style"')[1].split('else if operation')[0]
     assert branch.index('count of objects of targetDoc') < branch.index('set fixed length')
     assert 'activate' not in branch and 'save ' not in branch

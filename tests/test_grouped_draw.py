@@ -41,10 +41,10 @@ def test_reference_scaffold_mode_reuses_native_core_before_second_import(tmp_pat
     class Backend:
         def documents(self):return {'documents':[]}
         def import_file(self,path):
-            calls.append(('import',Path(path).read_text()))
+            calls.append(('import',Path(path).read_text(encoding='utf-8')))
             if len([v for v in calls if v[0]=='import'])==2:raise Stop('stop at second import')
             return {'document':{'document_id':1}}
-        def export(self,did,path,fmt):Path(path).write_text(ACETOPHENONE)
+        def export(self,did,path,fmt):Path(path).write_text(ACETOPHENONE,encoding='utf-8',newline='')
         def clean(self,did):calls.append(('clean',did))
         def close(self,did):pass
     original=seeds.seed_from_native_scaffold

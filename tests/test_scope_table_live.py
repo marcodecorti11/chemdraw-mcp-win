@@ -1,5 +1,6 @@
 """Opt-in, serial acceptance of the complete framed-table workflow."""
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -54,7 +55,12 @@ def test_interactive_scope_uses_one_visible_working_document(tmp_path,native_bri
     result=draw_structures(b,RECORDS,str(tmp_path/'interactive'),groups=GROUPS,
         columns=3,scaffold_smiles=PARENT,separators=False,presentation='interactive',exports='preview')
     did=result['document']['document_id']
-    assert events==[('create',did,True)]
+    if sys.platform=='win32':
+        # Windows ChemDraw cannot change an opened document's paper: one hidden measuring copy,
+        # then the finished table opens visibly once (scope_table.same_document).
+        assert [e[0] for e in events]==['create','close','create'] and events[0][2] is False
+        assert events[1]==('close',events[0][1]) and events[2]==('create',did,True)
+    else:assert events==[('create',did,True)]
     assert result['status']=='completed' and all(result['checks'].values())
     after=[d for d in b.documents()['documents'] if d['document_id']!=did]
     assert sorted(after,key=lambda d:d['document_id'])==sorted(before,key=lambda d:d['document_id'])
@@ -75,7 +81,7 @@ def test_acyclic_scope_native_backbone_alignment(tmp_path,native_bridge):
     result=draw_structures(b,records,str(tmp_path/'acyclic'),groups=groups,
         separators=False,presentation='interactive',exports='preview')
     assert result['status']=='completed' and all(result['checks'].values())
-    text=Path(result['artifacts']['cdxml']).read_text();root=ET.fromstring(text)
+    text=Path(result['artifacts']['cdxml']).read_text(encoding='utf-8');root=ET.fromstring(text)
     assert_core_orientation(_isolated(root,root.find('page/fragment')),text,LYSINE_SCOPE[0])
     did=result['document']['document_id']
     assert sorted([d for d in b.documents()['documents'] if d['document_id']!=did],key=lambda d:d['document_id'])==sorted(before,key=lambda d:d['document_id'])

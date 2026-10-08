@@ -250,7 +250,7 @@ def test_shared_runner_uses_single_api_append_without_seed_documents(tmp_path,mo
         def append(self,did,text,token):
             calls.append(did)
             self.current=text
-            path=tmp_path/'native.cdxml';path.write_text(text)
+            path=tmp_path/'native.cdxml';path.write_text(text,encoding='utf-8',newline='')
             return {'status':'completed','document':{'document_id':did},'after_snapshot':str(path),'source_token':source_token(text),'checks':{'page_unchanged':True}}
     class Bridge:
         def _id(self,did):return did
@@ -258,13 +258,13 @@ def test_shared_runner_uses_single_api_append_without_seed_documents(tmp_path,mo
         def _run(self,op):assert op=='active_document';return 42
         def export(self,did,path,fmt):
             assert did==42 and fmt=='svg'
-            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M0 0 L100 100" stroke="black"/></svg>')
+            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M0 0 L100 100" stroke="black"/></svg>',encoding='utf-8',newline='')
     monkeypatch.setattr(api_drawing,'get_backend',lambda bridge:Backend(),raising=False)
     result=api_drawing.run_api_drawing(Bridge(),{'workflow':'molecules','structures':[{'compound_id':'1','label':'Test','smiles':'CCO'}]},tmp_path/'out')
     assert result['status']=='completed' and result['document']['document_id']==42
     assert calls==[42]
     assert set(result['artifacts'])=={'cdxml'}
-    assert result['source_token']==source_token(Path(result['artifacts']['cdxml']).read_text())
+    assert result['source_token']==source_token(Path(result['artifacts']['cdxml']).read_text(encoding='utf-8'))
 
 
 def test_frontdoor_auto_molecules_does_not_use_legacy_presentation(tmp_path,monkeypatch):
@@ -299,7 +299,7 @@ def test_live_read_uses_api_graph_with_unsaved_changes(tmp_path,monkeypatch):
 
 
 def test_native_export_allows_svg_from_untitled_without_native_save():
-    text=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text()
+    text=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     branch=text.split('operation is "export" then')[1].split('else if')[0]
     assert 'diskPath is "" and targetFormat is not "Scalable Vector Graphics (SVG)"' in branch
 

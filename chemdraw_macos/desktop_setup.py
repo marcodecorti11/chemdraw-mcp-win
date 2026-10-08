@@ -12,8 +12,12 @@ import re
 import subprocess
 import sys
 
+from .private_files import make_private
+
 
 APP_NAME = 'ChemDraw MCP.app'
+WINDOWS = sys.platform == 'win32'
+CHEMDRAW_COMPANIES = ('Revvity', 'PerkinElmer', 'CambridgeSoft')
 
 
 def export_installer(package, target, installation_directory):
@@ -35,6 +39,7 @@ def export_installer(package, target, installation_directory):
     fd, temporary = tempfile.mkstemp(prefix='.chemdraw-installer-', dir=target.parent)
     try:
         with os.fdopen(fd, 'wb') as handle: handle.write(data)
+        make_private(temporary)
         os.replace(temporary, target)
     finally:
         if os.path.exists(temporary): os.unlink(temporary)
@@ -42,6 +47,9 @@ def export_installer(package, target, installation_directory):
 
 
 def settings_path():
+    if WINDOWS:
+        from .windows_install import Paths
+        return Paths().settings
     return Path.home()/'Library/Application Support/ChemDraw MCP/desktop-setup.json'
 
 
@@ -49,10 +57,12 @@ def read_settings(path=None):
     path = path or settings_path()
     if path.is_symlink():
         raise ValueError('Setup settings must not be a symbolic link')
-    return json.loads(path.read_text()) if path.exists() else {}
+    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
 
 
 def validate_app(value):
+    if WINDOWS:
+        return _validate_windows_app(value)
     app = Path(value).expanduser().resolve()
     try:
         metadata = plistlib.loads((app/'Contents/Info.plist').read_bytes())
@@ -61,6 +71,26 @@ def validate_app(value):
     if app.suffix != '.app' or metadata.get('CFBundleIdentifier') not in (
             'com.revvity.ChemDraw', 'com.perkinelmer.ChemDraw', 'com.cambridgesoft.ChemDraw'):
         raise ValueError('The selected application is not a recognized ChemDraw installation')
+    return app
+
+
+def _validate_windows_app(value):
+    """ChemDraw.exe (or its folder), recognized from its version resource, as on macOS from its bundle."""
+    from . import windows_native
+    app = Path(value).expanduser()
+    if app.is_dir():
+        app = app/'ChemDraw.exe'
+    app = app.resolve()
+    if not app.is_file() or app.suffix.lower() != '.exe':
+        raise ValueError('Choose the installed ChemDraw.exe')
+    try:
+        metadata = windows_native.app_metadata(app)
+    except Exception as exc:
+        raise ValueError('Choose the installed ChemDraw.exe') from exc
+    if (str(metadata.get('OriginalFilename', '')).lower() != 'chemdraw.exe'
+            or not str(metadata.get('ProductName', '')).startswith('ChemDraw')
+            or not str(metadata.get('CompanyName', '')).startswith(CHEMDRAW_COMPANIES)):
+        raise ValueError('The selected program is not a recognized ChemDraw installation')
     return app
 
 
@@ -73,7 +103,7 @@ def welcome_data():
 def diagnostic_details(report, exception=None):
     """Shareable allowlist. Never export exception text, paths or document data."""
     details = {key: report.get(key) for key in (
-        'package_version', 'macos', 'architecture', 'version', 'rdkit_version',
+        'package_version', 'macos', 'windows', 'architecture', 'version', 'rdkit_version',
         'cdxml_writer_available', 'rasterizer_available', 'status',
         'native_connection', 'shared_drawing_ready', 'document_count', 'elapsed_ms') if key in report}
     api = report.get('desktop_api', {})
@@ -84,6 +114,7 @@ def diagnostic_details(report, exception=None):
         match = re.search(r'\((-\d+)\)', error) if error.startswith('ChemDraw automation failed:') else None
         code = int(match[1]) if match else None
         kind = ('automation_denied' if code == -1743 else
+                'chemdraw_not_running' if error.startswith('ChemDraw is not running') else
                 'addin_timeout' if error.startswith('Add-in response timed out') else
                 'automation_timeout' if error.startswith('ChemDraw automation timed out') else
                 'native_error' if code is not None else 'unclassified_error')
@@ -117,9 +148,16 @@ def present_diagnostic(report):
     if report.get('status') == 'unavailable' and failure == 'automation_denied':
         title = 'ChemDraw control was denied'
         message = 'macOS reported an Automation denial. Check System Settings > Privacy & Security > Automation for the launching app. If no entry appears, choose Save diagnostics.'
+    elif report.get('status') == 'unavailable' and failure == 'chemdraw_not_running':
+        title = 'Start ChemDraw'
+        message = 'Open ChemDraw yourself; setup never starts it. Then open a drawing (File > New) and click Test connection.'
     elif report.get('status') == 'unavailable' and failure == 'addin_timeout':
         title = 'The ChemDraw add-in did not respond'
         message = 'The local add-in did not return the document read. Choose Save diagnostics and share the report; this does not establish a permissions problem.'
+    if WINDOWS and not ready and report.get('status') == 'local_ready':
+        message = 'Software checked. Start ChemDraw, open a drawing (File > New), then click Test connection.'
+    elif WINDOWS and not ready and report.get('status') == 'needs_document':
+        message = 'In ChemDraw, choose File > New. A blank drawing is fine. Then click Test connection.'
     # Never return drawings, document names, private credentials or raw XML to the UI.
     return {'status': report.get('status', 'unavailable'), 'ready': ready,
             'title': title, 'message': message,
@@ -147,6 +185,11 @@ class SetupSession:
         return self.bridge
 
     def install_clients(self, clients):
+        if WINDOWS:
+            from . import windows_install
+            if not getattr(sys, 'frozen', False):
+                raise ValueError('Use the packaged Windows setup for graphical client installation')
+            return windows_install.install_and_connect(Path(sys.executable).resolve().parent, clients)
         from .client_install import install_and_connect
         if not getattr(sys, 'frozen', False):
             raise ValueError('Use the bundled Mac application for graphical client installation')
@@ -178,6 +221,12 @@ class SetupSession:
                 else:
                     os.environ['CHEMDRAW_APP'] = previous
             return present_diagnostic(self.last_diagnostic)
+        if action == 'prepare' and WINDOWS:
+            # Windows ChemDraw is controlled through COM automation; no add-in or connection key.
+            self.last_diagnostic = {}
+            return {'status': 'prepared', 'addin_required': False}
+        if action == 'export_installer' and WINDOWS:
+            raise ValueError('No ChemDraw add-in is needed on Windows')
         if action == 'prepare':
             from .addin import get_backend
             self.last_diagnostic = {}
@@ -205,14 +254,17 @@ class SetupSession:
                 result = self.install_clients(request['clients'])
                 self.settings['clients'] = result['clients']
                 self.settings['installed_app'] = result.get('installed_app')
+                if result.get('installed_runtime'):  # Windows per-user installation
+                    self.settings['installed_runtime'] = result['installed_runtime']
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self.path.is_symlink():
                 raise ValueError('Refusing symbolic link for setup settings')
             import tempfile
             fd, name = tempfile.mkstemp(prefix='.setup-', dir=self.path.parent)
             try:
-                with os.fdopen(fd, 'w') as handle:
+                with os.fdopen(fd, 'w', encoding='utf-8') as handle:
                     json.dump({**self.settings, 'setup_complete': True}, handle)
+                make_private(name)
                 os.replace(name, self.path)
             finally:
                 if os.path.exists(name):
@@ -272,9 +324,22 @@ def runtime_main(argv=None):
         os.environ.pop('CHEMDRAW_DESKTOP_EXTENSION', None)
         from .cli import main
         return main(args[1:])
+    if args == ['--setup-gui'] and WINDOWS:
+        from . import windows_setup_gui
+        return windows_setup_gui.main()
     if args == ['--setup-service']:
         os.environ.pop('CHEMDRAW_DESKTOP_EXTENSION', None)
         serve_setup()
+        return 0
+    if args == ['--desktop-serve'] and WINDOWS:
+        # Clients launch current\\chemdraw-runtime.exe directly; no re-exec. Never launch programs here:
+        # an MCP client's job object would terminate them together with the server.
+        settings = read_settings()
+        if settings.get('chemdraw_app'):
+            os.environ['CHEMDRAW_APP'] = str(validate_app(settings['chemdraw_app']))
+        os.environ['CHEMDRAW_DESKTOP_EXTENSION'] = '1'
+        from .server import main
+        main(['--profile', 'full'])
         return 0
     if args == ['--desktop-serve']:
         settings = read_settings()

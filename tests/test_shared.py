@@ -60,7 +60,7 @@ def test_shared_parameter_reaches_harness_through_mcp_and_cli(tmp_path,monkeypat
     assert calls[-1][1]['document_id']==42
     monkeypatch.setattr(harness,'run_drawing',run)
     monkeypatch.setattr(cli,'Bridge',lambda:object())
-    path=tmp_path/'request.json';path.write_text(request.model_dump_json())
+    path=tmp_path/'request.json';path.write_text(request.model_dump_json(),encoding='utf-8',newline='')
     assert cli.main(['produce','--request',str(path),'--output',str(tmp_path/'out'),'--presentation','shared','--document','42'])==0
     assert calls[-1][1]['document_id']==42
 
@@ -148,7 +148,7 @@ def test_generated_final_is_closed_before_shared_paste_can_fail(tmp_path,monkeyp
         def export(self,*a):calls.append('export')
         def close(self,did):assert did==99;calls.append('close_generated')
     def generate(b,plan,out):
-        out.mkdir();p=out/'figure.cdxml';p.write_text(drawing())
+        out.mkdir();p=out/'figure.cdxml';p.write_text(drawing(),encoding='utf-8',newline='')
         return {'document':{'document_id':99},'artifacts':{'cdxml':str(p)}}
     def clipboard(b,did,**kw):
         assert did==42

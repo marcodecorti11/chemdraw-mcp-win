@@ -17,12 +17,14 @@ def test_native_cage_drawings_keep_identity_and_crossing_order(tmp_path):
             {'compound_id': 'cubane', 'label': 'Cubane', 'smiles': 'C12C3C4C1C5C2C3C45'},
             {'compound_id': 'bullvalene', 'label': 'Bullvalene', 'smiles': 'C1=CC2C3C2C=CC1C=C3'},
             {'compound_id': 'adamantane', 'label': 'Adamantane', 'smiles': 'C1C2CC3CC1CC(C2)C3'},
-        ], str(tmp_path / 'cages'), columns=3)
-        final = result['document']['document_id']
+        ], str(tmp_path / 'cages'), columns=3, presentation='background')
+        # Auto is canvas-first with a compact audit; the grid audit belongs to the background
+        # workflow, which closes its own result document.
+        final = None if result.get('document_closed') else result['document']['document_id']
         assert result['audit']['status'] == 'checks_passed'
         reports = result['audit']['grid_audit']['verification']['molecule_checks']
         assert all(r['crossing_order_verified'] for r in reports.values())
-        assert 'CrossingBonds=' in Path(result['artifacts']['cdxml']).read_text()
+        assert 'CrossingBonds=' in Path(result['artifacts']['cdxml']).read_text(encoding='utf-8')
         print('CAGE_REVIEW=' + result['review'])
     finally:
         if final is not None:

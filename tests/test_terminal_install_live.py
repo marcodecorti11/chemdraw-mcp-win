@@ -2,12 +2,14 @@
 import json
 import os
 from pathlib import Path
-import pty
 import select
 import subprocess
 import time
 
 import pytest
+
+# POSIX pseudo-terminal acceptance; Windows has no pty module (see the Windows console test).
+pty = pytest.importorskip('pty', reason='POSIX pseudo-terminal live test; pty is unavailable on Windows')
 
 CLI = os.environ.get('CHEMDRAW_INSTALLED_CLI')
 pytestmark = pytest.mark.skipif(not CLI or os.environ.get('CHEMDRAW_ADDIN_LIVE_TEST') != '1',
@@ -43,7 +45,7 @@ def test_installed_terminal_animation_draws_only_in_owned_document(tmp_path):
         (tmp_path/'terminal.ansi').write_bytes(terminal)
         assert b'\x1b[?1049h' in terminal and b'\x1b[?1049l' in terminal
         assert b'38;5;218m' in terminal
-        report = json.loads((out/'first-run.json').read_text())
+        report = json.loads((out/'first-run.json').read_text(encoding='utf-8'))
         assert report['status'] == 'checks_passed'
         assert report['document']['document_id'] == target
         assert report['document']['molecule_count'] == 2

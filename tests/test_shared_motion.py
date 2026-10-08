@@ -30,6 +30,6 @@ assert.throws(()=>positionSelection({left:0,top:0},()=>[10,10,20,20],()=>{calls+
 assert.equal(calls,3);
 assert.throws(()=>positionSelection({left:20,top:10},()=>[10,10,20,20],()=>{throw Error('focus lost');},()=>{}),/focus lost/);
 '''
-    source='global.ObjC={import:()=>{}};\n'+SCRIPT.read_text()+'\n'+checks
+    source='global.ObjC={import:()=>{}};\n'+SCRIPT.read_text(encoding='utf-8')+'\n'+checks
     result=subprocess.run([node,'-e',source],text=True,capture_output=True)
     assert result.returncode==0,result.stderr

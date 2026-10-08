@@ -275,7 +275,7 @@ def measure_table_payload(bridge,payload):
     # On uncertain native operations retain the copy and stop. Never retry.
     _native(bridge.export,did,str(snapshot),'cdxml')
     try:
-        corrected,expected=center_measured_payload(payload,snapshot.read_text())
+        corrected,expected=center_measured_payload(payload,snapshot.read_text(encoding='utf-8'))
     except ValueError as exc:
         _native(bridge.close,did)
         raise NeedsInput('table_measurement_failed',
@@ -346,7 +346,7 @@ def run_api_drawing(bridge,plan,out,document_id=None):
         planning['layout_measurement']='native ink; one hidden measuring copy'
         timer.mark('native_table_measurement')
     out=Path(out);out.mkdir()
-    (out/'before.cdxml').write_text(initial['cdxml']);(out/'payload.cdxml').write_text(payload)
+    (out/'before.cdxml').write_text(initial['cdxml'],encoding='utf-8',newline='');(out/'payload.cdxml').write_text(payload,encoding='utf-8',newline='')
     _write_json(out/'request.json',plan)
     try:
         page_options={'allow_page_expansion':True} if planning['pages_added'] or int(ET.fromstring(payload).find('page').get('HeightPages','1'))>1 else {}
@@ -356,7 +356,7 @@ def run_api_drawing(bridge,plan,out,document_id=None):
         _write_json(out/'audit.json',{'status':'not_completed','message':str(exc),'planning':planning})
         raise
     figure=out/'figure';figure.mkdir()
-    path=figure/'figure.cdxml';native=Path(result['after_snapshot']).read_text();path.write_text(native)
+    path=figure/'figure.cdxml';native=Path(result['after_snapshot']).read_text(encoding='utf-8');path.write_text(native,encoding='utf-8',newline='')
     from .workflow import remap_ids
     from .batch import NativeUncertain
     try:
@@ -383,16 +383,16 @@ def run_api_drawing(bridge,plan,out,document_id=None):
             from .raster import rasterize_svg
             if export_mode=='preview':
                 png=figure/'preview.png'
-                png.write_bytes(rasterize_svg(svg.read_text(),1200,background='white'))
+                png.write_bytes(rasterize_svg(svg.read_text(encoding='utf-8'),1200,background='white'))
                 artifacts['preview']=str(png)
             else:
                 png=figure/'figure.png'
-                png.write_bytes(rasterize_svg(svg.read_text(),plan.get('pixels',3200)))
+                png.write_bytes(rasterize_svg(svg.read_text(encoding='utf-8'),plan.get('pixels',3200)))
                 artifacts['png']=str(png)
             timer.mark('rasterize')
             fresh=backend.read(did)
             verify_export_snapshot(native,fresh['cdxml'])
-            path.write_text(fresh['cdxml'])
+            path.write_text(fresh['cdxml'],encoding='utf-8',newline='')
             result['source_token']=fresh['source_token']
             result['checks']['native_svg_export']=True
             artifacts['svg']=str(svg)

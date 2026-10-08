@@ -1,12 +1,45 @@
 """One temporary themed terminal surface for the entire setup conversation."""
 import shutil
 import sys
-import termios
 import textwrap
 import threading
 import time
 
 from .welcome import load_molecules
+
+if sys.platform == 'win32':
+    import ctypes
+    _ECHO_INPUT, _VT_OUTPUT = 0x0004, 0x0004
+
+    def _console_mode(std):
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(std)
+        mode = ctypes.c_uint32()
+        return (handle, mode.value) if kernel32.GetConsoleMode(handle, ctypes.byref(mode)) else (None, None)
+
+    def quiet_input():
+        """Hide typed input; returns a restore callable (no-op without a console)."""
+        handle, mode = _console_mode(-10)  # STD_INPUT_HANDLE
+        if handle is None: return lambda: None
+        ctypes.windll.kernel32.SetConsoleMode(handle, mode & ~_ECHO_INPUT)
+        return lambda: ctypes.windll.kernel32.SetConsoleMode(handle, mode)
+
+    def enable_ansi():
+        handle, mode = _console_mode(-11)  # STD_OUTPUT_HANDLE
+        if handle is not None: ctypes.windll.kernel32.SetConsoleMode(handle, mode | _VT_OUTPUT)
+else:
+    import termios
+
+    def quiet_input():
+        fd = sys.stdin.fileno()
+        original = termios.tcgetattr(fd)
+        quiet = list(original)
+        quiet[3] &= ~termios.ECHO
+        termios.tcsetattr(fd, termios.TCSANOW, quiet)
+        return lambda: termios.tcsetattr(fd, termios.TCSANOW, original)
+
+    def enable_ansi():
+        pass
 
 PINK = '38;5;218'
 LAVENDER = '38;5;183'
@@ -88,6 +121,7 @@ class SetupScreen:
     def __enter__(self):
         self.started = time.monotonic()
         if self.enabled:
+            enable_ansi()
             self.stream.write('\x1b[?1049h\x1b[?25l' + BACKGROUND + '\x1b[2J')
             self.draw()
             self.thread = threading.Thread(target=self.animate, daemon=True)
@@ -121,21 +155,18 @@ class SetupScreen:
             pages = [lines[i:i + capacity] for i in range(0, len(lines), capacity)] or [[]]
         else:
             pages = [self.body]
-        original = None
+        restore = None
         try:
             if self.enabled and input_fn is input and sys.stdin.isatty():
-                original = termios.tcgetattr(sys.stdin.fileno())
-                quiet = list(original)
-                quiet[3] &= ~termios.ECHO
-                termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, quiet)
+                restore = quiet_input()
             for index, body in enumerate(pages):
                 hint = prompt if index == len(pages) - 1 else 'Return for more  /  Ctrl-C to stop'
                 self.show(self.title, body, hint)
                 result = input_fn('' if self.enabled else hint + ': ')
             return result
         finally:
-            if original is not None:
-                termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, original)
+            if restore is not None:
+                restore()
 
     def __exit__(self, *exc):
         self.stop.set()

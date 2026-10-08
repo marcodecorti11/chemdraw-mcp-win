@@ -40,9 +40,12 @@ async def test_guarded_drawing_profile_end_to_end(tmp_path,payload):
             assert data['status']=='completed',data
             assert data['document_closed'] is True
             assert data['presentation']['mode']=='background'
-            assert len(data['gates'])==5
+            # Plain molecules report the five harness gates; panels (scope-table batch) and explicit
+            # reactions (reaction batch) are routed to workflows that report their own checks instead.
+            if 'gates' in data:assert len(data['gates'])==5
+            else:assert data['checks'] and all(data['checks'].values()),data['checks']
             for fmt in ('cdxml','svg','png'):assert Path(data['artifacts'][fmt]).stat().st_size>100
-            assert json.loads((tmp_path/'job/result.json').read_text())['document_closed'] is True
+            assert json.loads((tmp_path/'job/result.json').read_text(encoding='utf-8'))['document_closed'] is True
             assert owner.documents()==baseline
             print('HARNESS_ACCEPTANCE='+json.dumps({'case':payload['molecules'][0]['label'],'artifacts':data['artifacts']}))
 

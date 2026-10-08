@@ -16,7 +16,7 @@ def connect_checkout(checkout, *, uv=None, home=None):
     import shlex
     checkout=Path(checkout).expanduser().resolve()
     try:
-        project=tomllib.loads((checkout/'pyproject.toml').read_text())['project']['name']
+        project=tomllib.loads((checkout/'pyproject.toml').read_text(encoding='utf-8'))['project']['name']
         valid=(checkout/'uv.lock').is_file() and (checkout/'chemdraw_macos/development.py').is_file()
     except (OSError,KeyError,ValueError):project=None;valid=False
     if project!='chemdraw-mcp-macos' or not valid:raise ValueError('Choose the ChemDraw MCP source checkout')
@@ -66,15 +66,23 @@ def _atomic(path, data, mode=0o600):
     try:
         with os.fdopen(fd, 'wb') as handle:
             handle.write(data)
-            os.fchmod(handle.fileno(), mode)
+            if hasattr(os, 'fchmod'):
+                os.fchmod(handle.fileno(), mode)
+        if not hasattr(os, 'fchmod'):  # Windows: protected per-user DACL instead of mode bits
+            from .private_files import make_private
+            make_private(name)
         os.replace(name, path)
     finally:
         if os.path.exists(name):
             os.unlink(name)
 
 
-def connect_clients(clients, runtime, *, home=None, args=None):
-    """Plan every selected config first; preserve other servers and original bytes."""
+def connect_clients(clients, runtime, *, home=None, args=None,
+                    claude_config=None, codex_config=None, claude_manifest=None):
+    """Plan every selected config first; preserve other servers and original bytes.
+
+    Config locations default to the macOS ones; the Windows installer passes its own.
+    """
     if not isinstance(clients, list) or not clients:
         raise ValueError('Select at least one assistant')
     if any(c not in ('claude', 'codex', 'bundle') for c in clients) or len(set(clients)) != len(clients):
@@ -89,16 +97,18 @@ def connect_clients(clients, runtime, *, home=None, args=None):
     for client in clients:
         if client == 'bundle':
             continue  # The MCPB-capable host registered the bundle itself.
-        manifest = home/'Library/Application Support/Claude/Claude Extensions/local.mcpb.glenn-bojanov.chemdraw-macos/manifest.json'
+        manifest = Path(claude_manifest) if claude_manifest is not None else home/'Library/Application Support/Claude/Claude Extensions/local.mcpb.glenn-bojanov.chemdraw-macos/manifest.json'
         if client == 'claude' and manifest.is_file():
             try:
-                if json.loads(manifest.read_text()).get('name') == 'chemdraw-macos':
+                if json.loads(manifest.read_text(encoding='utf-8')).get('name') == 'chemdraw-macos':
                     bundle_clients.append('claude')
                     continue
             except (ValueError, AttributeError):
                 raise ValueError('Existing Claude extension metadata could not be checked')
-        path = (home/'Library/Application Support/Claude/claude_desktop_config.json' if client == 'claude'
-                else home/'.codex/config.toml')
+        if client == 'claude':
+            path = Path(claude_config) if claude_config is not None else home/'Library/Application Support/Claude/claude_desktop_config.json'
+        else:
+            path = Path(codex_config) if codex_config is not None else home/'.codex/config.toml'
         _regular(path)
         before = path.read_bytes() if path.exists() else None
         text = (before or b'').decode('utf-8')
@@ -135,6 +145,9 @@ def connect_clients(clients, runtime, *, home=None, args=None):
                 fd, name = tempfile.mkstemp(prefix=path.name+'.before-chemdraw-', dir=path.parent)
                 with os.fdopen(fd, 'wb') as handle:
                     handle.write(before)
+                if os.name == 'nt':
+                    from .private_files import make_private
+                    make_private(name)
                 backups.append(name)
             _atomic(path, after)
             written.append((path, before, after))
@@ -192,7 +205,7 @@ def install_and_connect(source_app, clients, *, home=None):
     # Keep the user's settings and avoid repeatedly adding our directory to PATH.
     rc = (Path(shell_directory).expanduser() if shell_directory else home)/'.zshrc'
     _regular(rc)
-    previous_rc = rc.read_text() if rc.exists() else ''
+    previous_rc = rc.read_text(encoding='utf-8') if rc.exists() else ''
     directory = shlex.quote(str(launcher.parent))
     block = ('# >>> ChemDraw MCP terminal access >>>\n'
              'case ":$PATH:" in\n'

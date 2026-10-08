@@ -19,7 +19,7 @@ def test_package_portable_versioned_and_content_addressed(tmp_path):
     output=tmp_path/'lab-style.json'
     save_package(p,output)
     assert load_package(output)==p
-    assert '/Users/' not in output.read_text()
+    assert '/Users/' not in output.read_text(encoding='utf-8')
     with pytest.raises(FileExistsError):save_package(p,output)
 
 def test_tampering_and_unknown_fields_rejected():
@@ -76,7 +76,7 @@ def test_input_unchanged():
     assert p==original and recipe=={'structures':[]}
 
 def test_duplicate_json_keys_rejected(tmp_path):
-    p=tmp_path/'bad.json';p.write_text('{"schema_version":1,"schema_version":2}')
+    p=tmp_path/'bad.json';p.write_text('{"schema_version":1,"schema_version":2}',encoding='utf-8',newline='')
     with pytest.raises(ValueError,match='Duplicate'):load_package(p)
 
 def test_styled_job_consumes_settings_and_records_exact_package(tmp_path,monkeypatch):
@@ -92,7 +92,7 @@ def test_styled_job_consumes_settings_and_records_exact_package(tmp_path,monkeyp
     assert calls[0]['layout']==p['settings']['grid']
     assert load_package(out/'lab-style.json')==p
     assert result['audit']['lab_style']['sha256']==p['sha256']
-    assert json.loads((out/'audit.json').read_text())==result['audit']
+    assert json.loads((out/'audit.json').read_text(encoding='utf-8'))==result['audit']
 
 def test_styled_job_rejects_unknown_fields_before_native(tmp_path):
     from chemdraw_macos.lab_style import run_styled_job

@@ -26,7 +26,7 @@ def test_mcp_new_workflows_callable_without_native(monkeypatch):
 def test_draw_cli_dispatches_explicit_manifest(tmp_path,monkeypatch,capsys):
     manifest=tmp_path/'request.json'
     structures=[{'compound_id':'a','label':'Ethanol','smiles':'CCO'}]
-    manifest.write_text(json.dumps({'schema_version':1,'structures':structures}))
+    manifest.write_text(json.dumps({'schema_version':1,'structures':structures}),encoding='utf-8',newline='')
     monkeypatch.setattr(cli,'Bridge',lambda:object())
     calls=[]
     monkeypatch.setattr(cli,'draw_structures',lambda b,**kw: calls.append(kw) or {'status':'test'})
@@ -37,7 +37,7 @@ def test_draw_cli_dispatches_explicit_manifest(tmp_path,monkeypatch,capsys):
 def test_draw_accepts_explicit_scaffold_manifest(tmp_path,monkeypatch):
     path=tmp_path/'input.json'
     path.write_text(json.dumps({'structures':[{'compound_id':'a','label':'Parent','smiles':'CC(=O)c1ccccc1'}],
-                               'scaffold_smiles':'CC(=O)c1ccccc1'}))
+                               'scaffold_smiles':'CC(=O)c1ccccc1'}),encoding='utf-8',newline='')
     monkeypatch.setattr(cli,'Bridge',lambda:object())
     calls=[]
     monkeypatch.setattr(cli,'draw_structures',lambda b,**kw: calls.append(kw) or {'status':'test'})

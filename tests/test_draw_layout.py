@@ -17,5 +17,5 @@ def test_layout_persisted_before_native_import(tmp_path):
         def import_file(self,path):raise RuntimeError('timeout')
     with pytest.raises(RuntimeError,match='timeout'):
         draw_structures(Timeout(),STRUCTURES,str(tmp_path/'out'),layout={'label_gap':8})
-    request=json.loads((tmp_path/'out/request.json').read_text())
+    request=json.loads((tmp_path/'out/request.json').read_text(encoding='utf-8'))
     assert request['layout']=={'label_gap':8}

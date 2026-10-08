@@ -6,6 +6,7 @@ from urllib.error import HTTPError
 import pytest
 
 from chemdraw_macos.addin import AddinChannel, source_token, prepare_payload
+from chemdraw_macos.private_files import is_private  # POSIX mode 600 or a protected Windows DACL
 
 
 EMPTY='<CDXML BondLength="18"><page id="1" BoundingBox="0 0 540 720" WidthPages="1" HeightPages="1"/></CDXML>'
@@ -159,12 +160,12 @@ def test_upgrade_refreshes_existing_suffixed_addin_and_retains_credentials(tmp_p
     credential = root.with_name(root.name+'.connection.json')
     before = credential.read_bytes()
     html = installed/'main.html'
-    html.write_text(html.read_text().replace('Document sent to local MCP', 'OLD CLIENT'))
+    html.write_text(html.read_text(encoding='utf-8').replace('Document sent to local MCP', 'OLD CLIENT'),encoding='utf-8',newline='')
     for _ in range(2):
         with DesktopAddin(None, directory=root, setup=True) as backend:
             assert backend.directory == installed
-            assert 'OLD CLIENT' not in html.read_text()
-            assert 'Document sent to local MCP' in html.read_text()
+            assert 'OLD CLIENT' not in html.read_text(encoding='utf-8')
+            assert 'Document sent to local MCP' in html.read_text(encoding='utf-8')
             assert credential.read_bytes() == before
             assert not root.exists()
 
@@ -209,7 +210,7 @@ def test_addin_package_is_local_authenticated_and_has_no_gui_drawing_calls(tmp_p
         assert metadata['isModalDialog'] is False
         assert metadata['name']=='ChemDraw MCP Native API'
         assert package.name=='ChemDraw MCP Native API.chemdrawaddin'
-        assert package.stat().st_mode & 0o077 == 0
+        assert is_private(package)
 
 
 def test_addin_installer_survives_destination_replacement(tmp_path):
@@ -243,9 +244,9 @@ def test_gui_preparation_preserves_existing_installation_identity(tmp_path):
     from chemdraw_macos.addin import DesktopAddin
     destination = tmp_path/'Add-ins/ChemDraw MCP Native API'
     with DesktopAddin(None, directory=destination):
-        before = json.loads((destination/'chemdraw-addin-metadata.json').read_text())
+        before = json.loads((destination/'chemdraw-addin-metadata.json').read_text(encoding='utf-8'))
     with DesktopAddin(None, directory=destination, setup=True) as backend:
-        assert json.loads((destination/'chemdraw-addin-metadata.json').read_text()) == before
+        assert json.loads((destination/'chemdraw-addin-metadata.json').read_text(encoding='utf-8')) == before
         assert backend.package.is_file()
 
 
@@ -330,7 +331,7 @@ def test_cli_reaches_the_same_addin_backend(monkeypatch,tmp_path,capsys):
         def append(self,*args):calls.append(('append',args));return {'status':'completed'}
     monkeypatch.setattr(addin,'DesktopAddin',Backend)
     monkeypatch.setattr(cli,'Bridge',lambda:object())
-    payload=tmp_path/'payload.cdxml';payload.write_text(MOLECULE)
+    payload=tmp_path/'payload.cdxml';payload.write_text(MOLECULE,encoding='utf-8',newline='')
     assert cli.main(['addin-connect'])==0
     assert cli.main(['addin-read','42'])==0
     assert cli.main(['addin-append','42','--input',str(payload),'--source-token','fresh'])==0
@@ -339,7 +340,7 @@ def test_cli_reaches_the_same_addin_backend(monkeypatch,tmp_path,capsys):
 
 def test_native_addin_dispatch_activates_only_when_opening_connection_panel():
     from pathlib import Path
-    text=Path('chemdraw_macos/native.applescript').read_text()
+    text=Path('chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     assert 'if operation is "active_document"' in text
     assert 'if operation is "addin_available"' in text
     assert 'if operation is "addin_open"' in text

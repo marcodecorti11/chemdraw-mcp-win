@@ -37,12 +37,12 @@ def test_final_render_mutation_cannot_receive_checks_passed(tmp_path, workflow):
     with pytest.raises(ValueError):
         operation(bridge, 1, str(tmp_path / 'out'), requests, source_token(original))
     assert bridge.docs[1] == original
-    assert json.loads((tmp_path / 'out/audit.json').read_text())['status'] == 'failed'
+    assert json.loads((tmp_path / 'out/audit.json').read_text(encoding='utf-8'))['status'] == 'failed'
 
 
 def test_annotation_uncertain_failed_copy_close_stops_outer_cleanup(tmp_path):
     source_path = tmp_path / 'source.cdxml'
-    source_path.write_text(SOURCE)
+    source_path.write_text(SOURCE,encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path / 'work')
     create = bridge.create
     close_attempts = []
@@ -63,5 +63,5 @@ def test_annotation_uncertain_failed_copy_close_stops_outer_cleanup(tmp_path):
     with pytest.raises(NativeUncertain):
         annotate_file(bridge, str(source_path), str(tmp_path / 'out'), ARROWS)
     assert len(close_attempts) == 1, 'An uncertain close must prevent the outer imported-copy close'
-    assert source_path.read_text() == SOURCE
-    assert json.loads((tmp_path / 'out/audit.json').read_text())['status'] == 'uncertain'
+    assert source_path.read_text(encoding='utf-8') == SOURCE
+    assert json.loads((tmp_path / 'out/audit.json').read_text(encoding='utf-8'))['status'] == 'uncertain'

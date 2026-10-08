@@ -207,7 +207,7 @@ def main(argv=None):
             if args.command=='live-read':result=read_live_document(b,args.document_id)
             elif args.command=='live-action':result=live_action(b,args.document_id,args.action,args.source_token,args.selection)
             elif args.command=='visibility':result=b.set_visibility(args.document_id,args.mode=='show')
-            else:result=render_cdxml(b,args.input.read_text(),args.output,background=not args.show)
+            else:result=render_cdxml(b,args.input.read_text(encoding='utf-8'),args.output,background=not args.show)
             print(json.dumps(result,indent=2,ensure_ascii=False))
             return 1 if result.get('status')=='unavailable_for_selection' else 0
         if args.command in ('inspect-targets','prepare-selection','edit-targets'):
@@ -216,7 +216,7 @@ def main(argv=None):
             if args.command=='inspect-targets':result=inspect_targets_document(b,args.document_id)
             elif args.command=='prepare-selection':result=prepare_selection_document(b,args.document_id,args.kind,args.ids,args.source_token)
             else:
-                recipe=json.loads(args.recipe.read_text())
+                recipe=json.loads(args.recipe.read_text(encoding='utf-8'))
                 if not isinstance(recipe,dict) or set(recipe)-{'selection','operation','pixels'}:raise ValueError('Invalid targeted recipe')
                 result=edit_targets_document(b,args.document,args.output,recipe['selection'],recipe['operation'],recipe.get('pixels',2400))
             print(json.dumps(result,indent=2,ensure_ascii=False));return 0
@@ -225,7 +225,7 @@ def main(argv=None):
             with DesktopAddin(Bridge()) as session:
                 if args.command=='addin-connect':result=session.connect()
                 elif args.command=='addin-read':result=session.read(args.document_id)
-                else:result=session.append(args.document_id,args.input.read_text(),args.source_token)
+                else:result=session.append(args.document_id,args.input.read_text(encoding='utf-8'),args.source_token)
             print(json.dumps(result,indent=2,ensure_ascii=False));return 0
         if args.command=='first-run':
             from .first_run import run_cli
@@ -245,13 +245,13 @@ def main(argv=None):
             print(json.dumps(result,indent=2,ensure_ascii=False))
             return 1 if result['status']=='unavailable_for_selection' else 0
         if args.command=='make-lab-style':
-            sections=json.loads(args.settings.read_text()) if args.settings else {}
+            sections=json.loads(args.settings.read_text(encoding='utf-8')) if args.settings else {}
             result=save_package(make_package(args.name,args.version,inspect_style_file(args.style)['preset'],**sections),args.output)
             print(json.dumps(result,indent=2));return 0
         if args.command=='inspect-lab-style':
             print(json.dumps(load_package(args.input),indent=2));return 0
         if args.command in ('build-ownership','suggest-routes'):
-            recipe=json.loads(args.recipe.read_text());text=args.input.read_text()
+            recipe=json.loads(args.recipe.read_text(encoding='utf-8'));text=args.input.read_text(encoding='utf-8')
             if not isinstance(recipe,dict):raise ValueError('Recipe must be a JSON object')
             if type(recipe.get('schema_version',1)) is not int or recipe.pop('schema_version',1)!=1:raise ValueError('Unsupported recipe schema')
             if args.command=='build-ownership':result=build_ownership(text,**recipe)
@@ -262,13 +262,13 @@ def main(argv=None):
             with args.output.open('x') as handle:json.dump(result,handle,indent=2)
             print(json.dumps(result,indent=2));return 0
         if args.command=='scope-job' and args.plan_only:
-            print(json.dumps(plan_scope_job(json.loads(args.manifest.read_text())),indent=2));return 0
+            print(json.dumps(plan_scope_job(json.loads(args.manifest.read_text(encoding='utf-8'))),indent=2));return 0
         if args.command=='scope-job' and not args.output:raise ValueError('Scope build requires --output; use --plan-only for offline planning')
         if args.command=='resolve':
             result=resolve_identifier(args.query,args.kind,args.allow_network)
             print(json.dumps(result,indent=2,ensure_ascii=False));return 0
         if args.command=='scan-scope':
-            options=json.loads(args.manifest.read_text())
+            options=json.loads(args.manifest.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','parent_smiles','site_atom_maps','substituents','include_parent'}:raise ValueError('Invalid custom scope manifest fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported scope manifest schema')
             result=propose_custom_scope(**options)
@@ -292,49 +292,49 @@ def main(argv=None):
         transactions.enter_context(getattr(bridge,'lock',nullcontext()))
         if args.command=='produce':
             from .harness import run_drawing
-            result=run_drawing(bridge,json.loads(args.request.read_text()),args.output,args.allow_network,args.presentation,document_id=args.document)
+            result=run_drawing(bridge,json.loads(args.request.read_text(encoding='utf-8')),args.output,args.allow_network,args.presentation,document_id=args.document)
             print(json.dumps(result,indent=2,ensure_ascii=False))
             return 0 if result['status']=='completed' else 2
-        elif args.command=='complex-draw':result=draw_complex(bridge,json.loads(args.recipe.read_text()),args.output,args.preset,args.pixels)
-        elif args.command=='scope-job':result=build_scope_job(bridge,json.loads(args.manifest.read_text()),args.output)
+        elif args.command=='complex-draw':result=draw_complex(bridge,json.loads(args.recipe.read_text(encoding='utf-8')),args.output,args.preset,args.pixels)
+        elif args.command=='scope-job':result=build_scope_job(bridge,json.loads(args.manifest.read_text(encoding='utf-8')),args.output)
         elif args.command=='reaction-series':
-            options=json.loads(args.manifest.read_text())
+            options=json.loads(args.manifest.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','steps','preset','pixels','layout'}:raise ValueError('Invalid reaction series fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported reaction series schema')
             if args.style:options['preset']=inspect_style_file(args.style)['preset']
             result=build_reaction_series(bridge,output_dir=args.output,**options)
-        elif args.command=='styled-job':result=run_styled_job(bridge,args.lab_style,args.workflow,json.loads(args.recipe.read_text()),args.output)
+        elif args.command=='styled-job':result=run_styled_job(bridge,args.lab_style,args.workflow,json.loads(args.recipe.read_text(encoding='utf-8')),args.output)
         elif args.command=='move-owned':
-            options=json.loads(args.recipe.read_text())
+            options=json.loads(args.recipe.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','ownership','moves','expected_source_token','pixels'}:raise ValueError('Invalid owned move fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported owned move schema')
             if args.input:result=move_file(bridge,args.input,args.output,**options)
             else:result=move_document(bridge,args.document,args.output,**options)
         elif args.command=='apply-route':
             from .route_suggestions import annotate_selected_route_file
-            report=json.loads(args.report.read_text())
+            report=json.loads(args.report.read_text(encoding='utf-8'))
             result=annotate_selected_route_file(bridge,args.input,args.output,report,args.candidate)
         elif args.command=='decorate-scope':
-            options=json.loads(args.recipe.read_text())
+            options=json.loads(args.recipe.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','groups','expected_source_token','frame','separators','pixels'}:raise ValueError('Invalid scope decoration recipe fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported scope decoration recipe schema')
             if args.input:result=decorate_scope_file(bridge,args.input,args.output,**options)
             else:result=decorate_scope_document(bridge,args.document,args.output,**options)
         elif args.command=='inspect-symbols':result=inspect_symbols_document(bridge,args.document_id)
         elif args.command=='symbols':
-            options=json.loads(args.recipe.read_text())
+            options=json.loads(args.recipe.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','symbols','expected_source_token','span','line_width','clearance','pixels'}:raise ValueError('Invalid symbol recipe fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported symbol recipe schema')
             if args.input:result=symbols_file(bridge,args.input,args.output,**options)
             else:result=symbols_document(bridge,args.document,args.output,**options)
         elif args.command=='reaction':
-            options=json.loads(args.manifest.read_text())
+            options=json.loads(args.manifest.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','reactants','products','conditions_above','conditions_below','preset','pixels','scaffold_smiles','layout'}:raise ValueError('Invalid reaction manifest fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported reaction manifest schema')
             if args.style:options['preset']=inspect_style_file(args.style)['preset']
             result=build_reaction(bridge,output_dir=args.output,**options)
         elif args.command=='draw':
-            options=json.loads(args.manifest.read_text())
+            options=json.loads(args.manifest.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','structures','preset','columns','pixels','scaffold_smiles','layout','charge_style','groups','frame','separators','scaffold_layout','presentation','document_id','exports'}:raise ValueError('Invalid draw manifest fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported draw manifest schema')
             if args.style:options['preset']=inspect_style_file(args.style)['preset']
@@ -343,26 +343,26 @@ def main(argv=None):
         elif args.command=='analyze':result=analyze_document(bridge,args.document_id)
         elif args.command=='inspect-annotations':result=inspect_annotations_document(bridge,args.document_id)
         elif args.command=='annotate':
-            options=json.loads(args.recipe.read_text())
+            options=json.loads(args.recipe.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','arrows','expected_source_token','line_width','pixels'}:raise ValueError('Invalid annotation recipe fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported annotation recipe schema')
             if args.input:result=annotate_file(bridge,args.input,args.output,**options)
             else:result=annotate_document(bridge,args.document,args.output,**options)
         elif args.command=='batch':
-            options=json.loads(args.manifest.read_text())
+            options=json.loads(args.manifest.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','items','pixels'}:raise ValueError('Invalid batch manifest fields')
             if type(options.get('schema_version',1)) is not int or options.pop('schema_version',1)!=1:raise ValueError('Unsupported batch manifest schema')
             result=batch_export(bridge,output_dir=args.output,**options)
             print(json.dumps(result,indent=2,ensure_ascii=False));return 0 if result['status']=='completed' else 1
         elif args.command=='grid':
-            options=json.loads(args.recipe.read_text())
+            options=json.loads(args.recipe.read_text(encoding='utf-8'))
             allowed={'schema_version','cells','expected_source_token','preset','columns','width','height','margin','h_gap','v_gap','label_gap','pixels'}
             if not isinstance(options,dict) or set(options)-allowed:raise ValueError('Invalid grid recipe fields')
             if options.pop('schema_version',1)!=1:raise ValueError('Unsupported grid recipe schema')
             if args.input:result=grid_file(bridge,args.input,args.output,**options)
             else:result=grid_document(bridge,args.document,args.output,**options)
         elif args.command=='edit':
-            options=json.loads(args.recipe.read_text())
+            options=json.loads(args.recipe.read_text(encoding='utf-8'))
             if not isinstance(options,dict) or set(options)-{'schema_version','operations','captions','expected_source_token','pixels'}:
                 raise ValueError('Invalid edit recipe fields')
             if options.pop('schema_version',1)!=1:raise ValueError('Unsupported edit recipe schema')
@@ -371,7 +371,7 @@ def main(argv=None):
         else:
             options={}
             if args.recipe:
-                options=json.loads(args.recipe.read_text())
+                options=json.loads(args.recipe.read_text(encoding='utf-8'))
                 allowed={'schema_version','preset','layout','caption_map','condition_map','gap','label_gap','width','pixels'}
                 if set(options)-allowed:raise ValueError('Unknown recipe fields: '+str(set(options)-allowed))
                 if options.pop('schema_version',1)!=1:raise ValueError('Unsupported recipe schema version')
@@ -380,16 +380,16 @@ def main(argv=None):
             if args.input:
                 if args.input.suffix.lower()!='.cdxml':
                     raise ValueError('Polish file input currently requires CDXML for pre-import validation; other formats can be imported and inspected with native tools')
-                source_signature=chemical_signature(args.input.read_text())
+                source_signature=chemical_signature(args.input.read_text(encoding='utf-8'))
                 imported=bridge.import_file(str(args.input));did=imported['document']['document_id']
             else:did=args.document
             try:
                 if args.input:
                     native=analyze_document(bridge,did)
-                    if chemical_signature(Path(native['snapshot']).read_text())!=source_signature:
+                    if chemical_signature(Path(native['snapshot']).read_text(encoding='utf-8'))!=source_signature:
                         raise ValueError('Native file import changed source chemistry')
                 if args.input and (options.get('caption_map') or options.get('condition_map')):
-                    mapping=remap_ids(args.input.read_text(),Path(native['snapshot']).read_text())
+                    mapping=remap_ids(args.input.read_text(encoding='utf-8'),Path(native['snapshot']).read_text(encoding='utf-8'))
                     options['caption_map']={mapping[f]:mapping[t] for f,t in options.get('caption_map',{}).items()}
                     options['condition_map']={mapping[a]:[mapping[t] for t in ts] for a,ts in options.get('condition_map',{}).items()}
                 result=polish_document(bridge,did,args.output,**options)

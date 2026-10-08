@@ -124,8 +124,8 @@ def test_document_move_and_persistent_sidecar(tmp_path):
     state = build_ownership(SAMPLE, OWNERS)
     result = move_document(bridge, 1, str(tmp_path/'out'), state, MOVE, source_token(SAMPLE))
     assert result['audit']['status'] == 'checks_passed' and bridge.docs[1] == SAMPLE
-    sidecar = json.loads((tmp_path/'out/ownership.json').read_text())
-    assert sidecar['source_token'] == source_token((tmp_path/'out/figure.cdxml').read_text())
+    sidecar = json.loads((tmp_path/'out/ownership.json').read_text(encoding='utf-8'))
+    assert sidecar['source_token'] == source_token((tmp_path/'out/figure.cdxml').read_text(encoding='utf-8'))
     assert result['ownership'] == sidecar and len(bridge.managed) == 1
 
 
@@ -145,7 +145,7 @@ def test_final_render_mutation_fails_and_uncertainty_never_closes(tmp_path):
 
 
 def test_file_move_uses_frozen_source_and_remaps_sidecar(tmp_path):
-    path = tmp_path/'source.cdxml'; path.write_text(SAMPLE)
+    path = tmp_path/'source.cdxml'; path.write_text(SAMPLE,encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path/'work'); create = bridge.create
     def renumber(text):
         root = ET.fromstring(text)
@@ -155,23 +155,23 @@ def test_file_move_uses_frozen_source_and_remaps_sidecar(tmp_path):
         return create(ET.tostring(root, encoding='unicode'))
     bridge.create = renumber
     result = move_file(bridge, str(path), str(tmp_path/'out'), build_ownership(SAMPLE,OWNERS), MOVE)
-    assert path.read_text() == SAMPLE and len(bridge.managed) == 1
+    assert path.read_text(encoding='utf-8') == SAMPLE and len(bridge.managed) == 1
     assert result['ownership']['owners'][0]['fragment_ids'] == ['2001']
 
 
 def test_scheme_vertical_move_rejected_before_creating_native_copy(tmp_path):
     # Native v0.9 regression: moving bromide/substrate down 30 pt caused
     # ChemDraw to remove ReactionStepReactants, not merely renumber its IDs.
-    text = (Path(__file__).parents[1]/'examples/sn2-annotation-input.cdxml').read_text()
+    text = (Path(__file__).parents[1]/'examples/sn2-annotation-input.cdxml').read_text(encoding='utf-8')
     owners = [dict(key=key,fragment_ids=[fid],caption_ids=[tid]) for key,fid,tid in
               [('bromide','1001','970'),('substrate','2002','971'),('product','3003','972'),('iodide','4004','973')]]
     state = build_ownership(text,owners)
-    path = tmp_path/'source.cdxml'; path.write_text(text)
+    path = tmp_path/'source.cdxml'; path.write_text(text,encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path/'work')
     with pytest.raises(ValueError,match='vertical.*reaction scheme'):
         move_file(bridge,str(path),str(tmp_path/'out'),state,
                   [dict(owner_key='bromide',delta=[0,30]),dict(owner_key='substrate',delta=[0,30])])
-    assert bridge.events == [] and path.read_text() == text and not (tmp_path/'out').exists()
+    assert bridge.events == [] and path.read_text(encoding='utf-8') == text and not (tmp_path/'out').exists()
     # A horizontal move retains all declared roles in its plan. Native saving
     # must still independently retain them, otherwise production fails closed.
     planned,_,_ = plan_move(text,state,[dict(owner_key='bromide',delta=[10,0])])

@@ -83,7 +83,7 @@ def _unique(pairs):
 def load_package(path):
     source=Path(path).expanduser().resolve(strict=True)
     if not source.is_file() or source.stat().st_size>100_000:raise ValueError('Lab style must be a JSON file of at most 100 KB')
-    return validate_package(json.loads(source.read_text(),object_pairs_hook=_unique))
+    return validate_package(json.loads(source.read_text(encoding='utf-8'),object_pairs_hook=_unique))
 
 def save_package(package,path):
     validated=validate_package(package);output=Path(path).expanduser()

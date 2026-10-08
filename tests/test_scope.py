@@ -153,9 +153,9 @@ def test_multi_molecule_analysis_has_top_level_source_token(tmp_path):
 
 def test_cli_grid_recipe_works_on_a_file(tmp_path,monkeypatch,capsys):
     from chemdraw_macos.cli import main
-    source=tmp_path/'source.cdxml';source.write_text(SAMPLE)
-    recipe=tmp_path/'recipe.json';recipe.write_text(json.dumps({'schema_version':1,'cells':CELLS,'columns':2}))
-    b=MeasuredBridge(tmp_path/'work');b.import_file=lambda path:b.create(Path(path).read_text())
+    source=tmp_path/'source.cdxml';source.write_text(SAMPLE,encoding='utf-8',newline='')
+    recipe=tmp_path/'recipe.json';recipe.write_text(json.dumps({'schema_version':1,'cells':CELLS,'columns':2}),encoding='utf-8',newline='')
+    b=MeasuredBridge(tmp_path/'work');b.import_file=lambda path:b.create(Path(path).read_text(encoding='utf-8'))
     monkeypatch.setattr('chemdraw_macos.cli.Bridge',lambda:b)
     assert main(['grid','--input',str(source),'--recipe',str(recipe),'--output',str(tmp_path/'out')])==0
     assert json.loads(capsys.readouterr().out)['audit']['status']=='checks_passed'

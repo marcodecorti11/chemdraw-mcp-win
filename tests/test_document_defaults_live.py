@@ -1,5 +1,6 @@
 """Serial native defaults acceptance on a private blank file only."""
 import os
+import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -14,13 +15,15 @@ def test_manual_edit_defaults_match_new_objects_without_replacing_document(tmp_p
     b=Bridge(workspace=tmp_path/'native')
     with b.lock:
         before=b.documents()['documents']
-        did=b.create(EMPTY,visible=False)['document']['document_id']
+        # Windows hidden working copies are windowless COM documents that cannot become the active
+        # document; open this private blank file as a normal window there instead.
+        did=b.create(EMPTY,visible=sys.platform=='win32')['document']['document_id']
         class Backend:
             n=0
             def read(self,target):
                 self.n+=1;path=tmp_path/f'read-{self.n}.cdxml'
                 b.export(target,str(path),'cdxml')
-                return {'cdxml':path.read_text(),'document':next(d for d in b.documents()['documents'] if d['document_id']==target)}
+                return {'cdxml':path.read_text(encoding='utf-8'),'document':next(d for d in b.documents()['documents'] if d['document_id']==target)}
         backend=Backend()
         initial=backend.read(did)
         active=b._run('active_document')

@@ -29,7 +29,7 @@ async def test_native_scope_decoration_mcp(tmp_path,labels):
                 created=await call('chemdraw_create_document',cdxml=raw)
                 did=created['document']['document_id'];owned.append(did)
                 report=await call('chemdraw_analyze_document',document_id=did)
-                mapping=remap_ids(raw,Path(report['snapshot']).read_text())
+                mapping=remap_ids(raw,Path(report['snapshot']).read_text(encoding='utf-8'))
                 groups=[{'label':('Group '+str(i+1)) if labels else '',
                     'fragment_ids':[mapping[k] for k in g['fragment_ids']],
                     'caption_ids':[mapping[k] for k in g['caption_ids']]} for i,g in enumerate(GROUPS)]

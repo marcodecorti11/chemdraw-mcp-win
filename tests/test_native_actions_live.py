@@ -26,7 +26,7 @@ def three_molecules():
 
 def graphs(path):
     from rdkit import Chem
-    return sorted(Chem.MolToSmiles(m) for m in Chem.MolsFromCDXML(Path(path).read_text()))
+    return sorted(Chem.MolToSmiles(m) for m in Chem.MolsFromCDXML(Path(path).read_text(encoding='utf-8')))
 
 
 def single_step_reaction():
@@ -60,13 +60,24 @@ async def test_native_actions_through_mcp(tmp_path,action):
                 return r.structuredContent or json.loads(r.content[0].text)
             baseline=await call('chemdraw_list_documents')
             source=(single_step_reaction() if action=='clean_reaction' else
-                    (Path(__file__).parents[1]/'examples/messy-oxidation.cdxml').read_text() if action=='unrecognized_reaction' else three_molecules())
+                    (Path(__file__).parents[1]/'examples/messy-oxidation.cdxml').read_text(encoding='utf-8') if action=='unrecognized_reaction' else three_molecules())
             created=await call('chemdraw_create_document',cdxml=source)
             did=created['document']['document_id']
             # No auto-close after an uncertain command. Once returned, this test
             # owns the known completed copy and can close it after verification.
             before=tmp_path/'before.cdxml';after=tmp_path/'after.cdxml'
             await call('chemdraw_export',document_id=did,path=str(before),format='cdxml')
+            if sys.platform=='win32' and action.startswith(('align_','distribute_')):
+                # Submenu commands are not offered by the Windows server (test_windows_capabilities):
+                # the request is rejected before dispatch and the owned copy is unchanged.
+                from chemdraw_macos.workflow import content_fingerprint
+                refused=await session.call_tool('chemdraw_native_action',{'document_id':did,'action':action,'selection':'all'})
+                assert refused.isError,refused
+                await call('chemdraw_export',document_id=did,path=str(after),format='cdxml')
+                assert content_fingerprint(before.read_text(encoding='utf-8'))==content_fingerprint(after.read_text(encoding='utf-8'))
+                await call('chemdraw_close_working_document',document_id=did)
+                assert await call('chemdraw_list_documents')==baseline
+                return
             result=await call('chemdraw_native_action',document_id=did,action='clean_reaction' if action=='unrecognized_reaction' else action,selection='all')
             expected='unavailable_for_selection' if action=='unrecognized_reaction' else 'native_action_applied_review_required'
             assert result['status']==expected,result

@@ -6,7 +6,7 @@ import pytest
 
 
 def test_bundled_native_sprites_are_portable_and_include_alizarin():
-    data = json.loads(files('chemdraw_macos').joinpath('data/welcome.json').read_text())
+    data = json.loads(files('chemdraw_macos').joinpath('data/welcome.json').read_text(encoding='utf-8'))
     assert data['renderer'] == 'native ChemDraw'
     assert len(data['molecules']) == 9
     names = {m['name'] for m in data['molecules']}

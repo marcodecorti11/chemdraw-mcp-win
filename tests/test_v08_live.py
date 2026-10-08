@@ -29,7 +29,8 @@ async def test_native_custom_style_and_reaction_mcp(tmp_path,operation):
             try:
                 if operation=='style':
                     result=await call('chemdraw_draw_structures',structures=[{'compound_id':'a','label':'Ethanol','smiles':'CCO'}],
-                        output_dir=str(tmp_path/'style'),preset=preset)
+                        output_dir=str(tmp_path/'style'),preset=preset,presentation='background')
+                    # Custom styles are a separate explicit workflow (shared canvas returns needs_input).
                     cdxml=Path(result['output_dir'],'figure','figure.cdxml')
                 else:
                     result=await call('chemdraw_build_reaction',
@@ -38,7 +39,8 @@ async def test_native_custom_style_and_reaction_mcp(tmp_path,operation):
                         conditions_above='oxidation',conditions_below='layout test',
                         output_dir=str(tmp_path/'reaction'),preset=preset)
                     cdxml=Path(result['output_dir'],'figure.cdxml')
-                final=result['document']['document_id']
+                # Background results close their own document.
+                final=None if result.get('document_closed') else result['document']['document_id']
                 assert result['audit']['status']=='checks_passed'
                 assert all(result['audit']['checks'].values())
                 root=ET.parse(cdxml).getroot()

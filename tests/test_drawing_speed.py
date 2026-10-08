@@ -25,7 +25,7 @@ def drawing_backend(tmp_path, monkeypatch):
             events.append('append')
             self.current = text
             path = tmp_path / 'after.cdxml'
-            path.write_text(text)
+            path.write_text(text,encoding='utf-8',newline='')
             return {'status': 'completed', 'document': {'document_id': did},
                     'after_snapshot': str(path), 'checks': {'existing_content_preserved': True}}
 
@@ -39,7 +39,7 @@ def drawing_backend(tmp_path, monkeypatch):
         def export(self, did, path, fmt):
             events.append('export')
             assert fmt == 'svg'
-            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><path d="M10 10 L90 40" stroke="black"/></svg>')
+            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><path d="M10 10 L90 40" stroke="black"/></svg>',encoding='utf-8',newline='')
 
     backend = Backend()
     monkeypatch.setattr(api_drawing, 'get_backend', lambda b: backend)
@@ -68,7 +68,7 @@ def test_preview_is_small_white_native_derived_image_with_timings(drawing_backen
             'native_svg_export', 'rasterize', 'export_verify'} <= stages.keys()
     assert all(value >= 0 for value in stages.values())
     assert result['timings']['total_seconds'] >= sum(stages.values()) - .001
-    assert json.loads((tmp_path / 'out/audit.json').read_text())['timings'] == result['timings']
+    assert json.loads((tmp_path / 'out/audit.json').read_text(encoding='utf-8'))['timings'] == result['timings']
 
 
 def test_canvas_delivery_omits_rendering_but_retains_native_checks(drawing_backend, tmp_path):

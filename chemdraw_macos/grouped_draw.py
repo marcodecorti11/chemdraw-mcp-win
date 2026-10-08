@@ -31,13 +31,13 @@ def group_drawn_structures(bridge, document_id, text, cells, groups, output_dir,
     validate_draw_groups(groups, [c['compound_id'] for c in cells])
     out = Path(output_dir); out.mkdir()
     arranged, plan = arrange_scope_groups(text, cells, groups, columns, layout, frame, separators)
-    (out/'planned.cdxml').write_text(arranged)
+    (out/'planned.cdxml').write_text(arranged,encoding='utf-8',newline='')
     _write_json(out/'group-layout.json', plan)
     gid = None
     try:
         grouped = _native(bridge.create, arranged); gid = grouped['document']['document_id']
         path = out/'grouped-native.cdxml'; _native(bridge.export, gid, str(path), 'cdxml')
-        native = path.read_text()
+        native = path.read_text(encoding='utf-8')
         verification = verify_scope(arranged, native, plan['layout'])
         native_cells = {c['compound_id']: c for c in verification['cells']}
         decorated_groups = [{'label': g['label'],

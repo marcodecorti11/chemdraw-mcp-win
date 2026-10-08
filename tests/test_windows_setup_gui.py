@@ -1,0 +1,98 @@
+"""Windows graphical setup: flow, private diagnostics, animation data and a window smoke test."""
+import json
+import sys
+
+import pytest
+
+from chemdraw_macos import windows_setup_gui as gui
+from chemdraw_macos.private_files import is_private
+
+
+def test_braille_sprites_decode_like_the_mac_animation():
+    full = chr(0x28FF)  # all eight dots
+    assert sorted(gui.sprite_dots({'rows': [full]})) == sorted(
+        [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (0, 3), (1, 3)])
+    assert gui.sprite_dots({'rows': [' ' + chr(0x2801)]}) == [(2, 0)]
+
+
+def test_layout_fits_the_canvas_with_margins():
+    points, scale, left, top = gui.sprite_layout([(0, 0), (10, 4)], 200, 100)
+    assert scale > 0 and left >= 12 and top >= 12
+    assert points == [(0, 0), (10, 4)]
+
+
+def test_flow_has_no_addin_step_on_windows():
+    flow = gui.Flow()
+    assert flow.step == 0
+    assert flow.receive({'status': 'local_ready', 'ready': False}) is None and flow.step == 1
+    flow.receive({'status': 'needs_document', 'ready': False})
+    assert flow.step == 1 and flow.show_diagnostics
+    flow.receive({'status': 'ready', 'ready': True})
+    assert flow.step == 2 and flow.connected
+    assert flow.receive({'status': 'finished'}) == 'finished' and flow.finished
+    flow.receive({'status': 'selected'})
+    assert flow.step == 0 and not flow.connected
+
+
+def test_diagnostics_autosave_is_private_and_free_of_raw_errors(tmp_path):
+    record = gui.Diagnostics(session='abc-123')
+    record.record('test', 'unavailable', {'failure': {'kind': 'chemdraw_not_running'}})
+    path = record.autosave(tmp_path / 'Logs')
+    assert path.name == 'setup-abc-123.txt' and is_private(path)
+    text = path.read_text(encoding='utf-8')
+    assert text.startswith('ChemDraw MCP setup diagnostics')
+    body = json.loads(text.split('\n\n', 1)[1])
+    assert body['events'][0]['details'] == {'failure': {'kind': 'chemdraw_not_running'}}
+    with pytest.raises(ValueError):
+        gui.Diagnostics(session='../x').autosave(tmp_path / 'Logs')
+
+
+class FakeSession:
+    def __init__(self):
+        self.requests = []
+        self.settings = {}
+
+    def dispatch(self, request):
+        self.requests.append(request)
+        if request['action'] == 'welcome':
+            from chemdraw_macos.welcome import load_molecules
+            return {'status': 'welcome', 'molecules': load_molecules()}
+        return {'status': 'local_ready', 'ready': False, 'title': 'Software checked', 'message': 'ok', 'details': {}}
+
+    def close(self):
+        pass
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Tk window smoke test on the Windows desktop')
+def test_window_builds_animates_and_runs_a_check(tmp_path, monkeypatch):
+    tk = pytest.importorskip('tkinter')
+    session = FakeSession()
+    try:
+        app = gui.SetupWindow(session, logs=tmp_path / 'Logs', detect_app=lambda: None)
+    except tk.TclError as exc:
+        pytest.skip(f'No interactive desktop for Tk: {exc}')
+    try:
+        app.root.withdraw()
+        for _ in range(5):
+            app.animate_once(0.3)
+        assert app.dot_items
+        app.run_action({'action': 'check'})
+        import time
+        deadline = time.monotonic() + 5
+        while app.busy and time.monotonic() < deadline:
+            app.root.update()
+            time.sleep(.01)
+        assert session.requests[-1] == {'action': 'check'}
+        assert app.flow.step == 1
+        assert (tmp_path / 'Logs').glob('setup-*.txt')
+    finally:
+        app.root.destroy()
+
+
+def test_animation_runs_unless_explicitly_reduced():
+    # Windows "Animation effects" is off on many machines and must not freeze the installer's sprite;
+    # only an explicit opt-out does.
+    from chemdraw_macos import windows_setup_gui as gui
+    assert gui.reduced_motion({}) is False
+    assert gui.reduced_motion({'CHEMDRAW_MCP_REDUCE_MOTION': '0'}) is False
+    assert gui.reduced_motion({'CHEMDRAW_MCP_REDUCE_MOTION': '1'}) is True

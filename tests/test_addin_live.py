@@ -11,7 +11,16 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 import pytest
 
+from native_helpers import assert_background, focus_elsewhere, foreground_name, new_untitled_document
+
 pytestmark=pytest.mark.skipif(os.environ.get('CHEMDRAW_ADDIN_LIVE_TEST')!='1',reason='Requires installed local ChemDraw MCP add-in')
+
+
+def full_result(reply):
+    """MCP drawing replies are compact; planning lives in the local result named by 'details'."""
+    if 'planning' in reply or 'details' not in reply:
+        return reply
+    return json.loads(Path(reply['details']).read_text(encoding='utf-8'))
 
 
 def panel(snapshot,count,y):
@@ -46,19 +55,21 @@ async def test_native_api_untitled_batch_background_and_stale_guard(tmp_path):
             assert connected['status']=='connected',connected
             baseline=await call('chemdraw_list_documents')
             # This test owns the new untitled document. No user document is closed.
-            created=subprocess.check_output(['osascript','-e','tell application "ChemDraw 23.0.1" to get id of (make new document)'],text=True)
-            did=int(created.strip())
+            did=new_untitled_document()
             first=await call('chemdraw_addin_read_document',document_id=did)
             assert first['document']['file']==''
             supplied=panel(first['cdxml'],5,50)
-            subprocess.run(['osascript','-e','tell application "Finder" to activate'],check=True)
+            focus_elsewhere()
             result=await call('chemdraw_addin_append_cdxml',document_id=did,cdxml=supplied,expected_source_token=first['source_token'])
             assert result['status']=='completed' and all(result['checks'].values())
             assert result['document']['file']=='' and result['document']['molecule_count']==5
-            foreground=subprocess.check_output(['osascript','-e','tell application "System Events" to get name of first application process whose frontmost is true'],text=True).strip()
-            assert foreground=='Finder'
+            foreground=foreground_name()
+            assert_background(foreground)
             second=await call('chemdraw_addin_read_document',document_id=did)
-            more=panel(second['cdxml'],1,450)
+            # Below the first panel on the actual page (portrait on the Mac; the Windows test
+            # template is landscape, 540 pt high).
+            page_height=float(ET.fromstring(second['cdxml']).find('page').get('BoundingBox').split()[3])
+            more=panel(second['cdxml'],1,450 if page_height>=700 else 350)
             stale=await session.call_tool('chemdraw_addin_append_cdxml',{'document_id':did,'cdxml':more,'expected_source_token':first['source_token']})
             assert stale.isError
             result2=await call('chemdraw_addin_append_cdxml',document_id=did,cdxml=more,expected_source_token=second['source_token'])
@@ -67,7 +78,7 @@ async def test_native_api_untitled_batch_background_and_stale_guard(tmp_path):
             final=await call('chemdraw_list_documents')
             assert {d['document_id'] for d in final['documents']}=={did,*[d['document_id'] for d in baseline['documents']]}
             report={'initial':first,'first_append':result,'second_append':result2,'foreground':foreground,'baseline':baseline,'final':final}
-            (tmp_path/'addin-native-report.json').write_text(json.dumps(report,indent=2))
+            (tmp_path/'addin-native-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8',newline='')
             print('ADDIN_NATIVE_REPORT='+str(tmp_path/'addin-native-report.json'))
             # Both successful appends have recovery snapshots; close only our own test.
             from chemdraw_macos.core import Bridge
@@ -87,34 +98,34 @@ async def test_ordinary_mcp_draw_and_eight_analogues_share_untitled_canvas(tmp_p
                 assert not response.isError,response
                 return response.structuredContent or json.loads(response.content[0].text)
             baseline=await call('chemdraw_list_documents')
-            did=int(subprocess.check_output(['osascript','-e','tell application "ChemDraw 23.0.1" to get id of (make new document)'],text=True))
+            did=new_untitled_document()
             report={'document_id':did,'baseline':baseline}
-            (tmp_path/'owned-document.json').write_text(json.dumps(report))
+            (tmp_path/'owned-document.json').write_text(json.dumps(report),encoding='utf-8',newline='')
             parent='CC1C=Cc2c1c(=O)n(C)c(=O)n2C'
             first=await call('chemdraw_draw',output_dir=str(tmp_path/'parent'),request={'molecules':[{'format':'smiles','value':parent,'label':'Caffeine'}],'panel':'plain'})
             report['first']=first
-            (tmp_path/'ordinary-api-report.json').write_text(json.dumps(report,indent=2))
+            (tmp_path/'ordinary-api-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8',newline='')
             assert first['status']=='completed',first
             assert first['document']['document_id']==did and first['document']['file']==''
             live=await call('chemdraw_read_live_document',document_id=did)
             assert live['snapshot_method']=='desktop_addin'
             from rdkit import Chem
             assert live['molecular_graphs'][0]['canonical_smiles']==Chem.MolToSmiles(Chem.MolFromSmiles(parent))
-            subprocess.run(['osascript','-e','tell application "Finder" to activate'],check=True)
+            focus_elsewhere()
             records=[{'compound_id':str(i+2),'label':'R = '+label,'smiles':'CC1C('+r+')=Cc2c1c(=O)n(C)c(=O)n2C'} for i,(label,r) in enumerate([('Me','C'),('OMe','OC'),('NH2','N'),('F','F'),('Br','Br'),('CN','C#N'),('CF3','C(F)(F)F'),('Ph','c2ccccc2')])]
             second=await call('chemdraw_draw_structures',structures=records,output_dir=str(tmp_path/'analogues'),presentation='auto')
             report['second']=second
-            (tmp_path/'ordinary-api-report.json').write_text(json.dumps(report,indent=2))
+            (tmp_path/'ordinary-api-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8',newline='')
             assert second['status']=='completed',second
             assert second['document']['document_id']==did and second['document']['molecule_count']==9
-            assert second['planning']['reference_source']=='live_document'
+            assert full_result(second)['planning']['reference_source']=='live_document'
             assert second['checks']['new_object_style_verified']
             final=await call('chemdraw_list_documents')
             assert {d['document_id'] for d in final['documents']}=={did,*[d['document_id'] for d in baseline['documents']]}
-            foreground=subprocess.check_output(['osascript','-e','tell application "System Events" to get name of first application process whose frontmost is true'],text=True).strip()
-            assert foreground=='Finder'
+            foreground=foreground_name()
+            assert_background(foreground)
             report.update(final=final,foreground=foreground,live=live)
-            (tmp_path/'ordinary-api-report.json').write_text(json.dumps(report,indent=2))
+            (tmp_path/'ordinary-api-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8',newline='')
             from chemdraw_macos.core import Bridge
             Bridge()._run('close',did)
 
@@ -125,15 +136,15 @@ async def test_native_captions_remain_text_and_numbered_batch_keeps_count(tmp_pa
     async with stdio_client(params) as (reader,writer):
         async with ClientSession(reader,writer) as session:
             await session.initialize()
-            did=int(subprocess.check_output(['osascript','-e','tell application "ChemDraw 23.0.1" to get id of (make new document)'],text=True))
-            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':did}))
+            did=new_untitled_document()
+            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':did}),encoding='utf-8',newline='')
             values=['CCO','CC(=O)Nc1ccccc1','c1ccccc1','CCCC','CCN(CC)CC','c1ccc2[nH]ccc2c1']
             molecules=[{'format':'smiles','value':sm} for sm in values]
             molecules[0]['label']='DMT'  # Intentionally misleading caption, never a second molecule.
             response=await session.call_tool('chemdraw_draw',{'document_id':did,'output_dir':str(tmp_path/'batch'),
                 'request':{'panel':'plain','molecules':molecules}})
             result=response.structuredContent or json.loads(response.content[0].text)
-            (tmp_path/'caption-grid-report.json').write_text(json.dumps(result,indent=2))
+            (tmp_path/'caption-grid-report.json').write_text(json.dumps(result,indent=2),encoding='utf-8',newline='')
             assert result['status']=='completed',result
             root=ET.parse(result['artifacts']['cdxml']).getroot()
             assert result['document']['molecule_count']==6
@@ -157,26 +168,26 @@ async def test_native_auto_replacement_scope_retains_live_orientation(tmp_path):
                 assert not response.isError,response
                 return response.structuredContent or json.loads(response.content[0].text)
             baseline=await call('chemdraw_list_documents')
-            did=int(subprocess.check_output(['osascript','-e','tell application "ChemDraw 23.0.1" to get id of (make new document)'],text=True))
-            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':did}))
+            did=new_untitled_document()
+            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':did}),encoding='utf-8',newline='')
             first=await call('chemdraw_draw',document_id=did,output_dir=str(tmp_path/'parent'),request={
                 'molecules':[{'format':'smiles','value':'CC1C=Cc2c1c(=O)n(C)c(=O)n2C','label':'Parent'}]})
             assert first['status']=='completed',first
-            before=Path(first['artifacts']['cdxml']).read_text()
+            before=Path(first['artifacts']['cdxml']).read_text(encoding='utf-8')
             second=await call('chemdraw_draw',document_id=did,output_dir=str(tmp_path/'scope'),request={
                 'panel':'auto','molecules':[{'format':'smiles','value':s,'label':'S'+str(i+1)} for i,s in enumerate(REPLACEMENT_SCOPE)]})
-            (tmp_path/'replacement-scope-report.json').write_text(json.dumps(second,indent=2))
+            (tmp_path/'replacement-scope-report.json').write_text(json.dumps(second,indent=2),encoding='utf-8',newline='')
             assert second['status']=='completed',second
             assert second['document']['document_id']==did
             assert second['document']['molecule_count']==11
             assert second['document']['file']==''
-            assert second['planning']['reference_source']=='live_document'
+            assert full_result(second)['planning']['reference_source']=='live_document'
             assert second['checks']['new_object_style_verified']
             root=ET.parse(second['artifacts']['cdxml']).getroot()
             assert len(list(root.iter('fragment')))==11
             assert [''.join(t.itertext()).strip() for t in root.findall('page/t')]==['Parent']+['S'+str(i+1) for i in range(10)]
             root.find('page').remove(root.find('page/fragment'))
-            assert_core_orientation(before,ET.tostring(root,encoding='unicode'),second['planning']['scaffold_smiles'])
+            assert_core_orientation(before,ET.tostring(root,encoding='unicode'),full_result(second)['planning']['scaffold_smiles'])
             final=await call('chemdraw_list_documents')
             assert {d['document_id'] for d in final['documents']}=={did,*[d['document_id'] for d in baseline['documents']]}
             from chemdraw_macos.core import Bridge
@@ -189,13 +200,13 @@ async def test_native_api_mixed_chemistry_batch(tmp_path):
     async with stdio_client(params) as (reader,writer):
         async with ClientSession(reader,writer) as session:
             await session.initialize()
-            did=int(subprocess.check_output(['osascript','-e','tell application "ChemDraw 23.0.1" to get id of (make new document)'],text=True))
-            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':did}))
+            did=new_untitled_document()
+            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':did}),encoding='utf-8',newline='')
             smiles=['CC(=O)Nc1ccccc1','Cn1c(=O)c2c(ncn2C)n(C)c1=O','N[C@@H](C)C(=O)O','[13CH3]CO','O=[N+]([O-])c1ccccc1','C/C=C/C','c1ccc2[nH]ccc2c1','[H]OC']
             response=await session.call_tool('chemdraw_draw',{'document_id':did,'output_dir':str(tmp_path/'mixed'),
                 'request':{'panel':'plain','molecules':[{'format':'smiles','value':sm,'label':'Test '+str(i+1)} for i,sm in enumerate(smiles)]}})
             result=response.structuredContent or json.loads(response.content[0].text)
-            (tmp_path/'mixed-api-report.json').write_text(json.dumps(result,indent=2))
+            (tmp_path/'mixed-api-report.json').write_text(json.dumps(result,indent=2),encoding='utf-8',newline='')
             assert result['status']=='completed',result
             assert result['document']['molecule_count']==len(smiles)
             from chemdraw_macos.core import Bridge

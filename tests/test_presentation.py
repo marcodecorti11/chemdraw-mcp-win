@@ -69,7 +69,7 @@ def test_hidden_import_and_create_share_policy(tmp_path,monkeypatch):
     monkeypatch.setattr(b,'_open_working',lambda path,visible=True:calls.append(visible) or {'document_id':12})
     monkeypatch.setattr(b,'close',lambda *a:{})
     text='<CDXML><page id="1"/></CDXML>'
-    source=tmp_path/'input.cdxml';source.write_text(text)
+    source=tmp_path/'input.cdxml';source.write_text(text,encoding='utf-8',newline='')
     @production_job
     def operation(bridge):
         bridge.import_file(str(source))

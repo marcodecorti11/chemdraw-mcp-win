@@ -12,7 +12,7 @@ from chemdraw_macos.core import Bridge
 XML = '<CDXML><page id="1"><fragment id="2"><n id="3" p="10 20" Element="7"/></fragment></page></CDXML>'
 
 def test_native_selection_is_read_directly_not_coerced_to_a_value():
-    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text()
+    script=(Path(__file__).parents[1]/'chemdraw_macos/native.applescript').read_text(encoding='utf-8')
     branch=script.split('operation is "live_state" then',1)[1].split('else if',1)[0]
     assert 'count of atoms of selection of targetDoc' in branch
     assert 'bounds of selection of targetDoc' in branch
@@ -41,7 +41,7 @@ class Fake:
         raise AssertionError(operation)
     def export(self, did, path, fmt):
         self.calls.append(('export', did, fmt))
-        Path(path).write_text(self.xml)
+        Path(path).write_text(self.xml,encoding='utf-8',newline='')
 
 
 def test_live_read_is_bound_to_document_and_reads_changed_content(tmp_path):
@@ -86,7 +86,7 @@ def test_untitled_analysis_uses_no_save_snapshot(tmp_path,monkeypatch):
     monkeypatch.setattr(shared,'clipboard',lambda bridge,did:{'cdxml':b.xml})
     result=analyze_document(b,12)
     assert result['document']['file']==''
-    assert Path(result['snapshot']).read_text()==XML
+    assert Path(result['snapshot']).read_text(encoding='utf-8')==XML
     assert not any(c[0]=='export' for c in b.calls)
 
 

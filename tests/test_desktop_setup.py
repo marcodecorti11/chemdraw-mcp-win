@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from chemdraw_macos import desktop_setup as setup
+from chemdraw_macos.private_files import is_private  # POSIX mode 600 or a protected Windows DACL
 
 
 def test_welcome_reuses_native_animation_and_small_author_credit():
@@ -94,9 +95,9 @@ def test_finish_releases_endpoint_before_saving_setup_state(tmp_path):
     result = session.dispatch({'action': 'finish'})
     assert events == ['closed']
     assert result['status'] == 'finished'
-    saved = json.loads((tmp_path/'settings.json').read_text())
+    saved = json.loads((tmp_path/'settings.json').read_text(encoding='utf-8'))
     assert saved['setup_complete'] is True
-    assert (tmp_path/'settings.json').stat().st_mode & 0o077 == 0
+    assert is_private(tmp_path/'settings.json')
 
 
 def test_protocol_is_json_only_and_unknown_commands_do_not_run(tmp_path):
@@ -129,7 +130,7 @@ def test_extension_waits_for_setup_and_reloads_app_choice(monkeypatch, tmp_path)
     app = tmp_path/'ChemDraw.app'
     (app/'Contents').mkdir(parents=True)
     (app/'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier': 'com.revvity.ChemDraw'}))
-    (tmp_path/'settings.json').write_text(json.dumps({'setup_complete': True, 'chemdraw_app': str(app)}))
+    (tmp_path/'settings.json').write_text(json.dumps({'setup_complete': True, 'chemdraw_app': str(app)}),encoding='utf-8',newline='')
     assert app_location() == app
 
 
@@ -161,7 +162,7 @@ def test_export_installer_checks_zip_and_keeps_credentials_private(tmp_path):
     target.parent.mkdir()
     setup.export_installer(package, target, tmp_path/'Add-ins/Native')
     assert target.read_bytes() == package.read_bytes()
-    assert target.stat().st_mode & 0o077 == 0
+    assert is_private(target)
     package.write_bytes(b'broken zip')
     with pytest.raises(ValueError, match='package'):
         setup.export_installer(package, target, tmp_path/'Add-ins/Native')

@@ -62,11 +62,37 @@ def test_thread_timeout_and_no_reentrant_leak(tmp_path):
 
 def test_symlink_lock_rejected_without_touching_target(tmp_path):
     from chemdraw_macos.native_lock import NativeSessionLock
-    target=tmp_path/'target';target.write_text('keep')
-    path=tmp_path/'lock';path.symlink_to(target)
+    target=tmp_path/'target';target.write_text('keep',encoding='utf-8',newline='')
+    path=tmp_path/'lock'
+    try:path.symlink_to(target)
+    except OSError as exc:
+        if sys.platform=='win32' and getattr(exc,'winerror',None)==1314:
+            pytest.skip('Creating a symlink needs Developer Mode or elevation on Windows; '
+                        'hard-link rejection is covered separately')
+        raise
     with pytest.raises(OSError):
         with NativeSessionLock(path): pytest.fail('Symlink accepted')
-    assert target.read_text()=='keep'
+    assert target.read_text(encoding='utf-8')=='keep'
+
+
+def test_hardlinked_lock_rejected_without_touching_target(tmp_path):
+    from chemdraw_macos.native_lock import NativeSessionLock
+    target=tmp_path/'target';target.write_text('keep',encoding='utf-8',newline='')
+    path=tmp_path/'lock';os.link(target,path)
+    with pytest.raises(OSError):
+        with NativeSessionLock(path): pytest.fail('Hard link accepted')
+    assert target.read_text(encoding='utf-8')=='keep'
+
+
+def test_shared_lock_lives_in_per_user_cache(monkeypatch,tmp_path):
+    from chemdraw_macos import native_lock
+    monkeypatch.setattr(native_lock,'_shared',None)
+    if sys.platform=='win32':
+        monkeypatch.setenv('LOCALAPPDATA',str(tmp_path))
+        assert native_lock.shared_native_lock().path==tmp_path/'chemdraw-mcp-macos'/'native.lock'
+    else:
+        monkeypatch.setattr(Path,'home',lambda:tmp_path)
+        assert native_lock.shared_native_lock().path==tmp_path/'Library/Caches/chemdraw-mcp-macos/native.lock'
 
 
 @pytest.mark.parametrize('timeout',[-1,True,float('nan'),float('inf'),61])
@@ -99,7 +125,7 @@ def test_whole_low_level_transaction_holds_gate(tmp_path,monkeypatch,operation):
     monkeypatch.setattr(b,'_run',run)
     if operation=='create':b.create('<CDXML/>')
     elif operation=='import_file':
-        p=tmp_path/'source.cdxml';p.write_text('<CDXML/>');b.import_file(p)
+        p=tmp_path/'source.cdxml';p.write_text('<CDXML/>',encoding='utf-8',newline='');b.import_file(p)
     else:b.managed.add(123);b.close(123)
 
 
@@ -156,6 +182,6 @@ def test_cli_holds_native_gate_through_dispatch(tmp_path,monkeypatch):
         assert gate.active
         return {}
     monkeypatch.setattr(cli,'draw_structures',draw)
-    p=tmp_path/'request.json';p.write_text('{"structures":[]}')
+    p=tmp_path/'request.json';p.write_text('{"structures":[]}',encoding='utf-8',newline='')
     assert cli.main(['draw','--manifest',str(p),'--output',str(tmp_path/'out')])==0
     assert not gate.active

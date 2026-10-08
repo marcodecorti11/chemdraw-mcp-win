@@ -18,4 +18,4 @@ def test_grid_native_timeout_does_not_close_or_retry(tmp_path):
     with pytest.raises(RuntimeError,match='native timeout'):
         grid_document(b,1,str(tmp_path/'out'),CELLS,source_token(SAMPLE),columns=2)
     assert not any(event[0]=='close' for event in b.events)
-    assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='uncertain'
+    assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='uncertain'

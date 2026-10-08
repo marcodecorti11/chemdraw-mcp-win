@@ -63,7 +63,7 @@ def combine_native_structures(native_texts,items,preset='house'):
     native_texts=[normalize_cdxml(text,preset)[0] for text in native_texts]
     root=copy.deepcopy(_root(native_texts[0]));page=root.find('page')
     for child in list(page):page.remove(child)
-    for attr in ('Name','WindowPosition','WindowSize'):root.attrib.pop(attr,None)
+    for attr in ('Name','WindowPosition','WindowSize','WindowIsZoomed'):root.attrib.pop(attr,None)
     x1,y1,x2,y2=numbers(page.get('BoundingBox'),4)
     page.set('id','1')
     native_boxes=[bounds(_root(text).find('page/fragment')) for text in native_texts]
@@ -200,15 +200,15 @@ def draw_structures(bridge,structures,output_dir,preset='house',columns=None,pix
                     from .scaffold_seed import seed_from_native_scaffold
                     molblock,seed_audit=seed_from_native_scaffold(item['canonical_smiles'],texts[0],scaffold_smiles)
                     audit.setdefault('reference_seeds',[]).append({'compound_id':item['compound_id'],**seed_audit})
-                seed=seeds/f'{item["compound_id"]}.mol';seed.write_text(molblock)
+                seed=seeds/f'{item["compound_id"]}.mol';seed.write_text(molblock,encoding='utf-8',newline='')
                 imported=_native(bridge.import_file,str(seed));did=imported['document']['document_id'];owned.append(did)
                 initial=seeds/f'{item["compound_id"]}-imported.cdxml'
                 _native(bridge.export,did,str(initial),'cdxml')
-                if chemical_signature(initial.read_text())!=[item['canonical_smiles']]:raise ValueError('Native MOL import changed requested identity')
+                if chemical_signature(initial.read_text(encoding='utf-8'))!=[item['canonical_smiles']]:raise ValueError('Native MOL import changed requested identity')
                 if not constrained:_native(bridge.clean,did)
                 native=seeds/f'{item["compound_id"]}-clean.cdxml';_native(bridge.export,did,str(native),'cdxml')
-                if chemical_signature(native.read_text())!=[item['canonical_smiles']]:raise ValueError('Native cleanup changed requested identity')
-                texts.append(native.read_text())
+                if chemical_signature(native.read_text(encoding='utf-8'))!=[item['canonical_smiles']]:raise ValueError('Native cleanup changed requested identity')
+                texts.append(native.read_text(encoding='utf-8'))
                 _native(bridge.close,did);owned.remove(did)
             if scaffold_smiles is not None:
                 from .alignment import align_native_structures
@@ -217,13 +217,13 @@ def draw_structures(bridge,structures,output_dir,preset='house',columns=None,pix
                 audit['alignment']=alignment
                 audit['limitations']='Explicit scaffold rigid alignment, not inferred correspondence outside that scaffold. Caller-supplied labels, no experimental yields or comprehensive intramolecular collision certification.'
             combined,cells=combine_native_structures(texts,records,preset)
-            (out/'combined.cdxml').write_text(combined)
+            (out/'combined.cdxml').write_text(combined,encoding='utf-8',newline='')
             created=_native(bridge.create,combined);did=created['document']['document_id'];owned.append(did)
             snap=out/'combined-native.cdxml';_native(bridge.export,did,str(snap),'cdxml')
-            mapping,_=verify_molecules(combined,snap.read_text())
+            mapping,_=verify_molecules(combined,snap.read_text(encoding='utf-8'))
             from .styles import verify_custom_style
-            verify_custom_style(combined,snap.read_text(),preset)
-            result=grid_document(bridge,did,str(out/'figure'),remap_cells(cells,mapping),source_token(snap.read_text()),
+            verify_custom_style(combined,snap.read_text(encoding='utf-8'),preset)
+            result=grid_document(bridge,did,str(out/'figure'),remap_cells(cells,mapping),source_token(snap.read_text(encoding='utf-8')),
                                  preset=preset,columns=columns,pixels=pixels,**layout)
             final_id=result['document']['document_id'];owned.append(final_id)
             final_folder='figure';grid_audit=result['audit']
@@ -231,13 +231,13 @@ def draw_structures(bridge,structures,output_dir,preset='house',columns=None,pix
                 from .symbols import symbols_document
                 from .ownership import _page_fit
                 from .annotations import _root as annotation_root
-                native=(out/'figure/figure.cdxml').read_text()
+                native=(out/'figure/figure.cdxml').read_text(encoding='utf-8')
                 requests=charge_requests(native)
                 audit['charge_style']={'mode':'circled','requested_count':len(requests)}
                 if requests:
                     charged=symbols_document(bridge,final_id,str(out/'charged'),requests,source_token(native),pixels=pixels)
                     charged_id=charged['document']['document_id'];owned.append(charged_id)
-                    _page_fit(annotation_root((out/'charged/figure.cdxml').read_text()))
+                    _page_fit(annotation_root((out/'charged/figure.cdxml').read_text(encoding='utf-8')))
                     audit['charge_style']['audit']=charged['audit']
                     _native(bridge.close,final_id);owned.remove(final_id)
                     result=charged;final_id=charged_id;final_folder='charged'
@@ -245,7 +245,7 @@ def draw_structures(bridge,structures,output_dir,preset='house',columns=None,pix
             _native(bridge.close,did);owned.remove(did)
             if groups is not None:
                 from .grouped_draw import group_drawn_structures
-                native=(out/final_folder/'figure.cdxml').read_text()
+                native=(out/final_folder/'figure.cdxml').read_text(encoding='utf-8')
                 grouped=group_drawn_structures(bridge,final_id,native,grid_audit['verification']['cells'],groups,
                     str(out/'grouped'),grid_audit['layout']['columns'],
                     {'margin':grid_audit['layout']['margin'],**layout},frame,separators,pixels)
@@ -268,9 +268,9 @@ def draw_structures(bridge,structures,output_dir,preset='house',columns=None,pix
                 audit['coordinate_seed']='First structure: native cleanup. Remaining structures: MOL seeds constrained to that native core, without subsequent cleanup.'
                 audit['native_cleanup_count']=1
             _write_json(out/'audit.json',audit)
-            (out/'review.html').write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Native structures</title><style>body{font:16px system-ui;margin:32px;background:#f2f4f5}figure{background:white;padding:24px}img{max-width:100%;max-height:85vh}a{color:#17617c}</style><h1>Native ChemDraw structures</h1><p>Explicit input graphs, native import and cleanup, measured grid. Names are caller-supplied. Visual review required.</p><figure><img src="figure/figure.png" alt="Native chemical structures"></figure><p><a href="figure/figure.cdxml">Editable ChemDraw</a> · <a href="figure/figure.svg">SVG</a> · <a href="figure/figure.png">PNG</a> · <a href="audit.json">Audit</a> · <a href="request.json">Request</a></p></html>''')
+            (out/'review.html').write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Native structures</title><style>body{font:16px system-ui;margin:32px;background:#f2f4f5}figure{background:white;padding:24px}img{max-width:100%;max-height:85vh}a{color:#17617c}</style><h1>Native ChemDraw structures</h1><p>Explicit input graphs, native import and cleanup, measured grid. Names are caller-supplied. Visual review required.</p><figure><img src="figure/figure.png" alt="Native chemical structures"></figure><p><a href="figure/figure.cdxml">Editable ChemDraw</a> · <a href="figure/figure.svg">SVG</a> · <a href="figure/figure.png">PNG</a> · <a href="audit.json">Audit</a> · <a href="request.json">Request</a></p></html>''',encoding='utf-8',newline='')
             if final_folder!='figure':
-                review=out/'review.html';review.write_text(review.read_text().replace('figure/figure.',final_folder+'/figure.'))
+                review=out/'review.html';review.write_text(review.read_text(encoding='utf-8').replace('figure/figure.',final_folder+'/figure.'),encoding='utf-8',newline='')
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit,'artifacts':audit['final_artifacts']}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),owned_document_ids=owned,

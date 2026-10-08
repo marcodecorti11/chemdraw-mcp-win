@@ -17,7 +17,7 @@ def fixture(tmp_path):
     bridge = MeasuredBridge(tmp_path / 'work')
     def mutable_import(path):
         bridge.events.append(('import_file', path))
-        return bridge.create(Path(path).read_text())
+        return bridge.create(Path(path).read_text(encoding='utf-8'))
     bridge.import_file = mutable_import
     return source, bridge, tmp_path / 'out'
 
@@ -48,12 +48,12 @@ def test_source_mutation_during_import_fails_with_retained_audit(tmp_path):
     original_create = bridge.create
     def mutate(text):
         result = original_create(text)
-        source.write_text(SAMPLE + '\n')
+        source.write_text(SAMPLE + '\n',encoding='utf-8',newline='')
         return result
     bridge.create = mutate
     with pytest.raises(ValueError, match='Source file changed'):
         grid_file(bridge, source, str(out), CELLS)
-    audit = json.loads((out / 'audit.json').read_text())
+    audit = json.loads((out / 'audit.json').read_text(encoding='utf-8'))
     assert audit['status'] == 'failed'
     assert audit['checks']['source_file_unchanged'] is False
     assert Path(audit['source_snapshot']).read_bytes() == SAMPLE.encode()
@@ -70,12 +70,12 @@ def test_source_mutation_or_disappearance_during_export_never_claimed_success(tm
             if remove:
                 source.unlink()
             else:
-                source.write_text(SAMPLE + '\n')
+                source.write_text(SAMPLE + '\n',encoding='utf-8',newline='')
         return result
     bridge.export = change
     with pytest.raises(ValueError, match='Source file changed'):
         grid_file(bridge, source, str(out), CELLS, columns=2)
-    audit = json.loads((out / 'audit.json').read_text())
+    audit = json.loads((out / 'audit.json').read_text(encoding='utf-8'))
     assert audit['status'] == 'failed'
     assert audit['checks']['source_file_unchanged'] is False
     assert not bridge.managed
@@ -92,7 +92,7 @@ def test_uncertain_grid_workflow_does_not_close_imported_source(tmp_path):
     with pytest.raises(NativeUncertain, match='timeout'):
         grid_file(bridge, source, str(out), CELLS, columns=2)
     assert not any(e[0] == 'close' for e in bridge.events)
-    assert json.loads((out / 'audit.json').read_text())['status'] == 'uncertain'
+    assert json.loads((out / 'audit.json').read_text(encoding='utf-8'))['status'] == 'uncertain'
 
 
 def test_uncertain_source_close_updates_completed_audit(tmp_path):
@@ -113,7 +113,7 @@ def test_uncertain_source_close_updates_completed_audit(tmp_path):
     bridge.create, bridge.close = remember, timeout
     with pytest.raises(NativeUncertain, match='source close timeout'):
         grid_file(bridge, source, str(out), CELLS, columns=2)
-    audit = json.loads((out / 'audit.json').read_text())
+    audit = json.loads((out / 'audit.json').read_text(encoding='utf-8'))
     assert audit['status'] == 'uncertain'
     assert 'source close timeout' in audit['close_error']
     assert len([e for e in bridge.events if e[0] == 'uncertain_close']) == 1
@@ -127,6 +127,6 @@ def test_uncertain_initial_creation_retains_audit_without_retry_or_close(tmp_pat
     bridge.create = timeout
     with pytest.raises(NativeUncertain, match='initial create timeout'):
         grid_file(bridge, source, str(out), CELLS)
-    assert json.loads((out / 'audit.json').read_text())['status'] == 'uncertain'
+    assert json.loads((out / 'audit.json').read_text(encoding='utf-8'))['status'] == 'uncertain'
     assert len([e for e in bridge.events if e[0] == 'uncertain_create']) == 1
     assert not any(e[0] == 'close' for e in bridge.events)

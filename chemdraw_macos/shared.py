@@ -14,7 +14,7 @@ from .native_lock import native_transaction
 
 def fingerprint(text):
     root=validate_cdxml(text)
-    for key in ('Name','CreationProgram','WindowPosition','WindowSize','BoundingBox','MacPrintInfo'):
+    for key in ('Name','CreationProgram','WindowPosition','WindowSize','WindowIsZoomed','BoundingBox','MacPrintInfo'):
         root.attrib.pop(key,None)
     # Copy As allocates a fresh page handle and normalizes the opaque printer
     # record. Keep actual page dimensions, drawing properties and object IDs.
@@ -207,16 +207,16 @@ def run_shared_legacy(bridge,plan,out,document_id=None):
     try:
         result=_execute(bridge,plan,out)
         generated=result['document']['document_id']
-        addition=Path(result['artifacts']['cdxml']).read_text()
+        addition=Path(result['artifacts']['cdxml']).read_text(encoding='utf-8')
         placement=plan_append(before,addition)
         fresh=clipboard(bridge,did)['cdxml']
         if fingerprint(fresh)!=fingerprint(before):
             raise ValueError('Working document changed during generation; no insertion was sent')
-        (out/'shared-before.cdxml').write_text(fresh)
+        (out/'shared-before.cdxml').write_text(fresh,encoding='utf-8',newline='')
         cdx=out/'shared-payload.cdx';bridge.export(generated,str(cdx),'cdx')
         bridge.close(generated)
         inserted=clipboard(bridge,did,cdx=str(cdx),placement=placement,expected=fresh)
-        (out/'shared-after.cdxml').write_text(inserted['cdxml'])
+        (out/'shared-after.cdxml').write_text(inserted['cdxml'],encoding='utf-8',newline='')
         try:checks=verify_append(fresh,inserted['cdxml'],addition,placement)
         except ValueError as exc:
             raise NativeUncertain('Shared paste occurred but verification failed; inspect before Undo or retry: '+str(exc)) from exc

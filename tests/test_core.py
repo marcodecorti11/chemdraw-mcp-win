@@ -27,6 +27,9 @@ def test_document_id_not_interpolated(tmp_path):
     b=Bridge(app_path=Path('/Applications/ChemDraw 23.0.1.app'),workspace=tmp_path)
     with pytest.raises(ValueError):b.inspect('1\nquit')
 
+@pytest.mark.skipif(__import__('sys').platform=='win32',
+                    reason='AppleScript subprocess timeout; the Windows COM worker timeout is '
+                           'test_windows_native.py::test_worker_timeout_is_uncertain_not_retried_and_poisons')
 def test_timeout_is_not_retried(monkeypatch,tmp_path):
     import subprocess
     calls=[]
@@ -39,24 +42,24 @@ def test_timeout_is_not_retried(monkeypatch,tmp_path):
 
 def test_output_refuses_overwrite_and_wrong_extension(tmp_path):
     b=Bridge(app_path=Path('/Applications/ChemDraw 23.0.1.app'),workspace=tmp_path)
-    file=tmp_path/'existing.pdf';file.write_text('keep')
+    file=tmp_path/'existing.pdf';file.write_text('keep',encoding='utf-8',newline='')
     with pytest.raises(FileExistsError):b.output_path(str(file),'pdf')
     with pytest.raises(ValueError):b.output_path(str(tmp_path/'x.txt'),'svg')
-    assert file.read_text()=='keep'
+    assert file.read_text(encoding='utf-8')=='keep'
 
 def test_native_export_names():
     assert FORMATS['svg']=='Scalable Vector Graphics (SVG)'
     assert FORMATS['cdxml']=='ChemDraw XML'
 
 def test_import_always_copies_source(tmp_path,monkeypatch):
-    src=tmp_path/'original.cdxml';src.write_text(SAMPLE)
+    src=tmp_path/'original.cdxml';src.write_text(SAMPLE,encoding='utf-8',newline='')
     b=Bridge(app_path=Path('/Applications/ChemDraw 23.0.1.app'),workspace=tmp_path/'work')
     seen=[]
     monkeypatch.setattr(b,'_run',lambda op,*args: seen.append((op,args)) or [123,'copy','',False,1])
     b.import_file(str(src))
     assert seen[0][0]=='open'
     assert Path(seen[0][1][0])!=src
-    assert src.read_text()==SAMPLE
+    assert src.read_text(encoding='utf-8')==SAMPLE
 
 def test_no_unrestricted_script_tool():
     from chemdraw_macos.server import mcp

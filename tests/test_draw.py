@@ -110,7 +110,7 @@ def test_uncertain_import_not_retried_or_closed(tmp_path):
     with pytest.raises(RuntimeError,match='timeout'):
         draw_structures(b,[{'compound_id':'a','label':'Ethanol','smiles':'CCO'}],str(tmp_path/'out'))
     assert b.calls==1
-    assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='uncertain'
+    assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='uncertain'
 
 
 def test_missing_requested_scaffold_rejected_before_native_calls(tmp_path):

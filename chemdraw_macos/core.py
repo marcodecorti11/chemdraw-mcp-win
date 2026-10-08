@@ -13,7 +13,19 @@ import xml.etree.ElementTree as ET
 from defusedxml import ElementTree as SafeET
 from .native_lock import shared_native_lock
 
+WINDOWS=sys.platform=='win32'
 FORMATS={'svg':'Scalable Vector Graphics (SVG)','pdf':'PDF','cdxml':'ChemDraw XML','cdx':'ChemDraw'}
+ALL_EXPORT_FORMATS=('cdxml','svg','png','pdf','cdx')
+# Windows ChemDraw automation offers no PDF export (observed on ChemDraw 26.1).
+EXPORT_FORMATS=('cdxml','svg','png','cdx') if WINDOWS else ALL_EXPORT_FORMATS
+
+def require_export_formats(bridge,formats):
+    """Refuse formats this platform cannot export, before any output or native call."""
+    available=getattr(bridge,'export_formats',ALL_EXPORT_FORMATS)
+    missing=[f for f in formats if f not in available]
+    if 'pdf' in missing:
+        raise ValueError('PDF export is not available from Windows ChemDraw; export SVG, PNG, CDXML or CDX instead')
+    if missing:raise ValueError(f'Unsupported format: {missing[0]}')
 PRESETS={
     'house':{'BondLength':'18','LineWidth':'1.58','BoldWidth':'2','LabelSize':'14',
              'CaptionSize':'8.28','font':'Helvetica Neue'},
@@ -85,6 +97,9 @@ def app_location()->Path:
             raise RuntimeError('Finish the ChemDraw MCP setup window before using native tools')
         if settings.get('chemdraw_app'):
             return validate_app(settings['chemdraw_app'])
+    if WINDOWS:
+        from .windows_native import app_location as windows_app
+        return windows_app()
     explicit=os.environ.get('CHEMDRAW_APP')
     if explicit:return Path(explicit).expanduser().resolve()
     candidates=sorted(Path('/Applications').glob('ChemDraw*.app'))
@@ -95,6 +110,10 @@ def document_row(row):
     return dict(zip(('document_id','name','file','modified','molecule_count'),row))
 
 class Bridge:
+    export_formats=EXPORT_FORMATS
+    # Windows ChemDraw cannot change an open document's paper (see scope_table).
+    same_document_scope_finish=not WINDOWS
+
     def __init__(self,app_path:Path|None=None,workspace:Path|None=None,timeout:float=25):
         self.app=app_path or app_location()
         self.workspace=workspace or Path(os.environ.get('CHEMDRAW_MCP_WORKSPACE',str(Path.home()/'ChemDraw-MCP-Output')))
@@ -102,6 +121,9 @@ class Bridge:
 
     def app_running(self):
         """Inspect running applications without sending ChemDraw a launch event."""
+        if WINDOWS:
+            from .windows_native import app_running
+            return app_running(self.timeout)
         with (self.app/'Contents/Info.plist').open('rb') as handle:
             bundle=plistlib.load(handle)['CFBundleIdentifier']
         script=('ObjC.import("AppKit"); '
@@ -119,8 +141,14 @@ class Bridge:
         return not getattr(self,'_production_depth',0)
 
     def _run(self,operation,*args):
+        if WINDOWS:
+            # COM on one bounded worker thread instead of AppleScript; same result shapes.
+            from . import windows_native
+            with self.lock:
+                if not self.app.is_file():raise RuntimeError(f'ChemDraw not found: {self.app}')
+                return windows_native.run(self.app,operation,args,self.timeout)
         if not self.app.is_dir():raise RuntimeError(f'ChemDraw not found: {self.app}')
-        template=Path(__file__).with_name('native.applescript').read_text()
+        template=Path(__file__).with_name('native.applescript').read_text(encoding='utf-8')
         quoted='"'+str(self.app).replace('\\','\\\\').replace('"','\\"')+'"'
         script=template.replace('__APP__',quoted)
         with self.lock:
@@ -194,7 +222,7 @@ class Bridge:
         source=Path(path).expanduser().resolve(strict=True)
         if source.suffix.lower() not in ('.cdxml','.cdx','.mol','.sdf'):raise ValueError('Supported imports: .cdxml, .cdx, .mol, .sdf')
         if source.stat().st_size>10_000_000:raise ValueError('Import exceeds 10 MB limit')
-        if source.suffix.lower()=='.cdxml':validate_cdxml(source.read_text())
+        if source.suffix.lower()=='.cdxml':validate_cdxml(source.read_text(encoding='utf-8'))
         with self.lock:
             copy=self._new_path(source.suffix);shutil.copyfile(source,copy)
             result=self._open_working(copy) if visible else self._open_working(copy,visible=False)
@@ -206,7 +234,7 @@ class Bridge:
         if type(visible) is not bool:raise ValueError('visible must be a boolean')
         validate_cdxml(cdxml)
         with self.lock:
-            path=self._new_path('.cdxml');path.write_text(cdxml)
+            path=self._new_path('.cdxml');path.write_text(cdxml,encoding='utf-8',newline='')
             result=self._open_working(path) if visible else self._open_working(path,visible=False)
             self.managed.add(result['document_id'])
         return {'document':result,'working_copy':str(path)}
@@ -241,6 +269,7 @@ class Bridge:
 
     def output_path(self,path,format):
         if format not in (*FORMATS,'png'):raise ValueError(f'Unsupported format: {format}')
+        require_export_formats(self,[format])
         target=Path(path).expanduser()
         if not target.is_absolute():raise ValueError('Output path must be absolute')
         if target.suffix.lower()!='.'+format:raise ValueError('Output extension must match format')
@@ -258,7 +287,8 @@ class Bridge:
                 svg=self._new_path('.svg')
                 self._run('export',did,str(svg),FORMATS['svg'])
                 subprocess.run([sys.executable,'-m','chemdraw_macos.raster',str(svg),str(target),str(pixels)],
-                    check=True,capture_output=True,text=True,timeout=self.timeout)
+                    check=True,capture_output=True,text=True,timeout=self.timeout,
+                    stdin=subprocess.DEVNULL)  # never inherit an MCP stdio pipe
             else:self._run('export',did,str(target),FORMATS[format])
             if not target.is_file() or not target.stat().st_size:raise RuntimeError('ChemDraw did not produce a nonempty export')
         result={'path':str(target),'format':format,'bytes':target.stat().st_size,'renderer':'native ChemDraw'}
@@ -288,6 +318,8 @@ class Bridge:
         did = self._id(document_id)
         if not isinstance(action, str) or action not in ACTIONS:
             raise ValueError('Unsupported native action')
+        from .native_actions import require_available
+        require_available(action)
         if selection not in ('current', 'all'):
             raise ValueError('Selection must be current or all')
         with self.lock:
@@ -308,7 +340,7 @@ class Bridge:
         require_style_fonts(preset)
         with self.lock:
             snapshot=self._new_path('.cdxml','backups');self.export(document_id,str(snapshot),'cdxml')
-            planned=style_cdxml(snapshot.read_text(),preset)
+            planned=style_cdxml(snapshot.read_text(encoding='utf-8'),preset)
             result=self.create(planned)
             if isinstance(preset,dict):
                 from .styles import verify_custom_style
@@ -317,7 +349,7 @@ class Bridge:
                 # error retain the owned document, without retrying or closing.
                 self.export(result['document']['document_id'],str(saved),'cdxml')
                 result={**result,'styled_snapshot':str(saved),
-                        'custom_style_verification':verify_custom_style(planned,saved.read_text(),preset)}
+                        'custom_style_verification':verify_custom_style(planned,saved.read_text(encoding='utf-8'),preset)}
         return {**result,'preset':preset,'source_snapshot':str(snapshot),
                 'note':'Styled copy. Coordinates and chemistry preserved; bond-length setting affects subsequent drawing/cleanup, not existing coordinates. Charge placement is retained, not recomputed.'}
 

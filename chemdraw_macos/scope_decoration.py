@@ -239,11 +239,11 @@ def _run(bridge,did,out,groups,token,frame,separators,pixels,reserved=False):
         inventory = _native(bridge.documents)['documents']
         contents = {d['document_id']:_document_content(bridge,d['document_id']) for d in inventory}
         baseline = _native(bridge.inspect,did)['document'];disk_hash = _file_hash(baseline)
-        snapshot = bridge._new_path('.cdxml','backups');_native(bridge.export,did,str(snapshot),'cdxml');source = snapshot.read_text()
+        snapshot = bridge._new_path('.cdxml','backups');_native(bridge.export,did,str(snapshot),'cdxml');source = snapshot.read_text(encoding='utf-8')
         if source_token(source) != token:raise ValueError('Source snapshot is stale; analyze again.')
         planned,plan = plan_scope_decoration(source,groups,frame,separators)
         if not reserved:out.mkdir()
-        (out/'before.cdxml').write_text(source);(out/'planned.cdxml').write_text(planned)
+        (out/'before.cdxml').write_text(source,encoding='utf-8',newline='');(out/'planned.cdxml').write_text(planned,encoding='utf-8',newline='')
         _write_json(out/'recipe.json',{'schema_version':1,'groups':groups,'frame':frame,'separators':separators,'expected_source_token':token,'pixels':pixels})
         audit['plan'] = plan;_write_json(out/'audit.json',audit)
         try:
@@ -251,7 +251,7 @@ def _run(bridge,did,out,groups,token,frame,separators,pixels,reserved=False):
             result = _native(bridge.create,planned);created = result['document']['document_id']
             audit['working_document_id'] = created;_write_json(out/'audit.json',audit)
             for fmt in ('svg','png','cdxml'):_native(bridge.export,created,str(out/f'figure.{fmt}'),fmt,pixels)
-            audit['native_verification'] = verify_scope_decoration(source,(out/'figure.cdxml').read_text(),plan)
+            audit['native_verification'] = verify_scope_decoration(source,(out/'figure.cdxml').read_text(encoding='utf-8'),plan)
             audit['checks'].update(audit['native_verification']['checks'])
             if [d for d in _native(bridge.documents)['documents'] if d['document_id']!=created] != inventory:
                 raise ValueError('Pre-existing document inventory changed.')
@@ -259,7 +259,7 @@ def _run(bridge,did,out,groups,token,frame,separators,pixels,reserved=False):
                 raise ValueError('Source or pre-existing document content changed.')
             audit['checks']['source_document_unchanged'] = True;audit['status'] = 'checks_passed'
             _write_json(out/'audit.json',audit)
-            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Scope decoration</title><h1>Scope decoration</h1><p>Visual review required. Groups are caller supplied.</p><img width="48%" src="before.png"><img width="48%" src="figure.png"><p><a href="figure.cdxml">Editable ChemDraw</a> <a href="figure.svg">SVG</a> <a href="audit.json">Audit</a></p>')
+            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Scope decoration</title><h1>Scope decoration</h1><p>Visual review required. Groups are caller supplied.</p><img width="48%" src="before.png"><img width="48%" src="figure.png"><p><a href="figure.cdxml">Editable ChemDraw</a> <a href="figure.svg">SVG</a> <a href="audit.json">Audit</a></p>',encoding='utf-8',newline='')
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),recovery='No retry or automatic close; inspect retained documents.')
@@ -290,7 +290,7 @@ def decorate_scope_file(bridge,path,output_dir,groups,expected_source_token=None
     did = None;completed = None;uncertain = False
     try:
         result = _native(bridge.create,source);did = result['document']['document_id']
-        snap = bridge._new_path('.cdxml','backups');_native(bridge.export,did,str(snap),'cdxml');native = snap.read_text()
+        snap = bridge._new_path('.cdxml','backups');_native(bridge.export,did,str(snap),'cdxml');native = snap.read_text(encoding='utf-8')
         _verify(source,native);mapping = remap_ids(source,native)
         if path.read_bytes()!=data:raise ValueError('Source file changed during import.')
         mapped = [{**g,'fragment_ids':[mapping[i] for i in g['fragment_ids']],
@@ -305,7 +305,7 @@ def decorate_scope_file(bridge,path,output_dir,groups,expected_source_token=None
     except Exception as exc:
         uncertain = isinstance(exc,NativeUncertain)
         import json
-        audit = json.loads((out/'audit.json').read_text());audit.update(evidence,status='uncertain' if uncertain else 'failed',error=str(exc))
+        audit = json.loads((out/'audit.json').read_text(encoding='utf-8'));audit.update(evidence,status='uncertain' if uncertain else 'failed',error=str(exc))
         _write_json(out/'audit.json',audit)
         if completed and not uncertain:
             try:_native(bridge.close,completed['document']['document_id'])
@@ -318,5 +318,5 @@ def decorate_scope_file(bridge,path,output_dir,groups,expected_source_token=None
             try:_native(bridge.close,did)
             except NativeUncertain as exc:
                 import json
-                audit = json.loads((out/'audit.json').read_text());audit.update(status='uncertain',close_error=str(exc));_write_json(out/'audit.json',audit)
+                audit = json.loads((out/'audit.json').read_text(encoding='utf-8'));audit.update(status='uncertain',close_error=str(exc));_write_json(out/'audit.json',audit)
                 raise

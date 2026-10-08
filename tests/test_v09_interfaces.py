@@ -25,7 +25,7 @@ def test_lab_style_cli_offline(tmp_path,monkeypatch,capsys):
 def test_scope_plan_cli_does_not_connect(tmp_path,monkeypatch,capsys):
     monkeypatch.setattr(cli,'Bridge',lambda:pytest.fail('Unexpected native access'))
     monkeypatch.setattr(cli,'plan_scope_job',lambda job:{'selection_required':True},raising=False)
-    manifest=tmp_path/'job.json';manifest.write_text('{}')
+    manifest=tmp_path/'job.json';manifest.write_text('{}',encoding='utf-8',newline='')
     assert cli.main(['scope-job','--manifest',str(manifest),'--plan-only'])==0
     assert json.loads(capsys.readouterr().out)['selection_required']
 
@@ -37,7 +37,7 @@ def test_new_native_cli_dispatch(command,function,manifest,tmp_path,monkeypatch,
     monkeypatch.setattr(cli,'Bridge',lambda:object())
     calls=[]
     monkeypatch.setattr(cli,function,lambda *a,**kw:calls.append((a,kw)) or {'ok':True},raising=False)
-    path=tmp_path/'job.json';path.write_text(json.dumps(manifest))
+    path=tmp_path/'job.json';path.write_text(json.dumps(manifest),encoding='utf-8',newline='')
     assert cli.main([command,'--manifest',str(path),'--output',str(tmp_path/'out')])==0
     assert len(calls)==1
 
@@ -46,7 +46,7 @@ def test_styled_cli_dispatch(tmp_path,monkeypatch,capsys):
     calls=[]
     monkeypatch.setattr(cli,'run_styled_job',lambda *a,**kw:calls.append((a,kw)) or {'ok':True},raising=False)
     style=tmp_path/'style.json';save_package(make_package('lab','1.0.0',STYLE),style)
-    recipe=tmp_path/'recipe.json';recipe.write_text('{"structures":[]}')
+    recipe=tmp_path/'recipe.json';recipe.write_text('{"structures":[]}',encoding='utf-8',newline='')
     assert cli.main(['styled-job','--lab-style',str(style),'--workflow','draw','--recipe',str(recipe),'--output',str(tmp_path/'out')])==0
     assert len(calls)==1
 
@@ -54,13 +54,13 @@ def test_move_cli_dispatch(tmp_path,monkeypatch,capsys):
     monkeypatch.setattr(cli,'Bridge',lambda:object())
     calls=[]
     monkeypatch.setattr(cli,'move_file',lambda *a,**kw:calls.append((a,kw)) or {'ok':True},raising=False)
-    recipe=tmp_path/'recipe.json';recipe.write_text('{"ownership":{},"moves":[]}')
+    recipe=tmp_path/'recipe.json';recipe.write_text('{"ownership":{},"moves":[]}',encoding='utf-8',newline='')
     assert cli.main(['move-owned','--input',str(tmp_path/'figure.cdxml'),'--recipe',str(recipe),'--output',str(tmp_path/'out')])==0
     assert len(calls)==1
 
 def test_ownership_mcp_uses_annotation_capable_snapshot(tmp_path,monkeypatch):
     from test_annotations import SOURCE
-    source=tmp_path/'source.cdxml';source.write_text(SOURCE)
+    source=tmp_path/'source.cdxml';source.write_text(SOURCE,encoding='utf-8',newline='')
     monkeypatch.setattr(server,'bridge',lambda:object())
     monkeypatch.setattr(server,'analyze_document',lambda *a:pytest.fail('Plain analyzer rejects supported native symbols'))
     monkeypatch.setattr(server,'inspect_annotations_document',lambda *a:{'snapshot':str(source)})

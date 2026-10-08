@@ -98,7 +98,7 @@ def test_page_overflow_fails_without_shrinking():
 class SeriesBridge(ReactionBridge):
     def import_file(self,path):
         from rdkit import Chem
-        mol=Chem.MolFromMolBlock(Path(path).read_text(),removeHs=False)
+        mol=Chem.MolFromMolBlock(Path(path).read_text(encoding='utf-8'),removeHs=False)
         smiles=Chem.MolToSmiles(mol,isomericSmiles=True)
         self.events.append(('import',path));return self.create(NATIVE[smiles])
 
@@ -108,7 +108,7 @@ def test_multistep_build_exports_one_native_figure_and_preserves_originals(tmp_p
     result=build_reaction_series(b,steps(),str(tmp_path/'out'))
     assert result['audit']['status']=='checks_passed'
     assert b.docs[1]==original and set(b.docs)=={1,result['document']['document_id']}
-    assert len(ET.fromstring((tmp_path/'out/figure.cdxml').read_text()).findall('page/scheme/step'))==2
+    assert len(ET.fromstring((tmp_path/'out/figure.cdxml').read_text(encoding='utf-8')).findall('page/scheme/step'))==2
     assert (tmp_path/'out/review.html').is_file()
 
 
@@ -120,7 +120,7 @@ def test_native_uncertainty_stops_without_any_further_close(tmp_path):
     b.export=fail
     with pytest.raises(NativeUncertain):build_reaction_series(b,steps(),str(tmp_path/'out'))
     assert b.events==at_failure
-    assert json.loads((tmp_path/'out/audit.json').read_text())['status']=='uncertain'
+    assert json.loads((tmp_path/'out/audit.json').read_text(encoding='utf-8'))['status']=='uncertain'
 
 def test_alkali_ions_use_explicit_checked_cdxml_seed_not_abnormal_valence_override():
     ss=prepare_steps(steps());parts=ss[1]['products'][0]['components']

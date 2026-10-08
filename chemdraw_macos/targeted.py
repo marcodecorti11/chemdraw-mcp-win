@@ -15,7 +15,7 @@ from .editing import (source_token, inspect_editable, _decoded, _label, _tetra,
                       _potential_tetra, _stereo_bonds, verify_native_edit)
 from .polish import supported_root, chemical_signature, numbers, transform, bond_lengths
 from .workflow import _write_json, remap_ids
-from .native_actions import ACTIONS
+from .native_actions import ACTIONS, require_available
 
 ALIGN_ACTIONS = {k for k in ACTIONS if k.startswith(('align_', 'distribute_'))}
 
@@ -195,7 +195,7 @@ def verify_targeted(planned,native):
 
 def _snapshot(bridge,did):
     path=bridge._new_path('.cdxml','backups');bridge.export(did,str(path),'cdxml')
-    return path.read_text()
+    return path.read_text(encoding='utf-8')
 
 
 def validate_alignment(text,selection,operation):
@@ -257,6 +257,7 @@ def edit_targets_document(bridge,document_id,output_dir,selection,operation,pixe
     if not out.is_absolute() or not out.parent.is_dir():raise ValueError('New absolute output directory with existing parent required')
     if out.exists() or out.is_symlink():raise FileExistsError('Output already exists')
     if type(pixels) is not int or not 256<=pixels<=8192:raise ValueError('Pixels must be 256 to 8192')
+    if isinstance(operation,dict) and operation.get('kind')=='native_align':require_available(operation.get('action'))
     with getattr(bridge,'lock',nullcontext()):
         source=_snapshot(bridge,document_id);selected=_selection(source,selection)
         alignment=isinstance(operation,dict) and operation.get('kind')=='native_align'
@@ -266,20 +267,20 @@ def edit_targets_document(bridge,document_id,output_dir,selection,operation,pixe
         audit={'status':'in_progress','visual_review':'required','native_ui_selection':False,
                'editing_backend':'copied CDXML','renderer':'native ChemDraw','owned_document_ids':[]}
         try:
-            (out/'before.cdxml').write_text(source)
+            (out/'before.cdxml').write_text(source,encoding='utf-8',newline='')
             if alignment:
                 planned,diff=_align_selected(bridge,source,selected,operation,audit)
                 audit['editing_backend']='native subset alignment; copy only verified translations'
-            (out/'planned.cdxml').write_text(planned)
+            (out/'planned.cdxml').write_text(planned,encoding='utf-8',newline='')
             _write_json(out/'recipe.json',{'selection':selected,'operation':operation,'pixels':pixels})
             for fmt in ('svg','png'):bridge.export(document_id,str(out/f'before.{fmt}'),fmt,pixels)
             if source_token(_snapshot(bridge,document_id))!=selected['source_token']:raise ValueError('Source became stale')
             result=bridge.create(planned);did=result['document']['document_id'];audit['owned_document_ids'].append(did)
             for fmt in ('svg','png','cdxml'):bridge.export(did,str(out/f'figure.{fmt}'),fmt,pixels)
-            verified=verify_targeted(planned,(out/'figure.cdxml').read_text())
+            verified=verify_targeted(planned,(out/'figure.cdxml').read_text(encoding='utf-8'))
             if not alignment:
                 # Restore planned IDs solely for comparing source/new obstacle pairs.
-                native_root=ET.fromstring((out/'figure.cdxml').read_text())
+                native_root=ET.fromstring((out/'figure.cdxml').read_text(encoding='utf-8'))
                 ids={v:k for k,v in verified['page_object_id_map'].items()}
                 for check in verified['molecules']:ids.update({v:k for k,v in check['atom_id_map'].items()})
                 for e in native_root.iter():
@@ -300,7 +301,7 @@ def edit_targets_document(bridge,document_id,output_dir,selection,operation,pixe
                 '<style>body{font:16px system-ui;background:#eee;margin:24px}main{display:flex;gap:20px}figure{margin:0;background:white;padding:16px;width:46%}img{width:100%;height:400px;object-fit:contain}pre{white-space:pre-wrap}</style>'
                 '<h1>Targeted edit</h1><p>Explicit copied-CDXML edit, rendered by ChemDraw. Visual and chemical review required.</p>'
                 '<main><figure>Before<img src="before.png"></figure><figure>After<img src="figure.png"></figure></main>'
-                '<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="audit.json">Audit</a></p><pre>'+html.escape(str(diff))+'</pre>')
+                '<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="audit.json">Audit</a></p><pre>'+html.escape(str(diff))+'</pre>',encoding='utf-8',newline='')
             return {'document':result['document'],'review':str(out/'review.html'),'audit':audit,
                     'artifacts':{fmt:str(out/f'figure.{fmt}') for fmt in ('cdxml','svg','png')}}
         except BaseException as exc:

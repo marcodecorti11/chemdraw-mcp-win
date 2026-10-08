@@ -42,7 +42,7 @@ async def test_complex_over_actual_mcp_transport(tmp_path,example):
                 return result.structuredContent or json.loads(result.content[0].text)
             baseline=await call('chemdraw_list_documents'); final=None
             try:
-                supplied=recipe() if example is None else json.loads((Path(__file__).parents[1]/'examples'/example).read_text())
+                supplied=recipe() if example is None else json.loads((Path(__file__).parents[1]/'examples'/example).read_text(encoding='utf-8'))
                 result=await call('chemdraw_draw_complex',recipe=supplied,output_dir=str(tmp_path/'mcp-complex'))
                 final=result['document']['document_id']
                 assert all(result['audit']['checks'].values())
@@ -55,9 +55,9 @@ def test_ferrocene_aromatic_import_loss_is_rejected_and_copy_closed(tmp_path):
     from chemdraw_macos.core import Bridge
     from chemdraw_macos.complexes import draw_complex
     bridge=Bridge(); baseline=bridge.documents()
-    supplied=json.loads((Path(__file__).parents[1]/'examples/coordination-ferrocene.json').read_text())
+    supplied=json.loads((Path(__file__).parents[1]/'examples/coordination-ferrocene.json').read_text(encoding='utf-8'))
     out=tmp_path/'ferrocene'
     with pytest.raises(ValueError,match='NumHydrogens|order'):
         draw_complex(bridge,supplied,str(out))
-    assert json.loads((out/'audit.json').read_text())['status']=='failed'
+    assert json.loads((out/'audit.json').read_text(encoding='utf-8'))['status']=='failed'
     assert bridge.documents()==baseline

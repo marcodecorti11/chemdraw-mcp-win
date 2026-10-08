@@ -63,6 +63,10 @@ def draw_scope_table(bridge, structures, output_dir, *, groups, preset='house', 
     timer.mark('input_and_seed')
     audit={'status':'in_progress','checks':{},'visual_review':'required'};owned=[]
     show_work=getattr(bridge,'_production_mode','interactive')=='interactive'
+    # Finishing in the measured window needs the cleared document to take the table's final paper.
+    # Windows ChemDraw keeps the paper of the opened file (COM ignores page size; CDXML insertion
+    # does not apply it): measure hidden there, then open the finished table visibly once.
+    same_document=show_work and getattr(bridge,'same_document_scope_finish',True)
     with getattr(bridge,'lock',nullcontext()):
         from .core import Bridge
         if show_work and isinstance(bridge,Bridge):
@@ -72,28 +76,28 @@ def draw_scope_table(bridge, structures, output_dir, *, groups, preset='house', 
         content={d['document_id']:_document_content(bridge,d['document_id']) for d in baseline}
         out.mkdir();_write_json(out/'request.json',{'structures':structures,'groups':groups,'preset':preset,
             'columns':columns,'scaffold_smiles':scaffold_smiles,'frame':frame,'separators':separators,'exports':exports})
-        (out/'seed.cdxml').write_text(seed);_write_json(out/'audit.json',audit)
+        (out/'seed.cdxml').write_text(seed,encoding='utf-8',newline='');_write_json(out/'audit.json',audit)
         try:
-            created=_native(bridge.create,seed,visible=show_work);did=created['document']['document_id'];owned.append(did)
+            created=_native(bridge.create,seed,visible=same_document);did=created['document']['document_id'];owned.append(did)
             audit['working_document_id']=did;_write_json(out/'audit.json',audit)
             snap=out/'measured.cdxml';_native(bridge.export,did,str(snap),'cdxml')
-            measured=snap.read_text();_verify(seed,measured)
+            measured=snap.read_text(encoding='utf-8');_verify(seed,measured)
             arranged,decorated,plan,decoration,paper=_layout(measured,records,groups,columns,layout,frame,separators,seed=seed)
             timer.mark('native_measurement_and_layout')
-            (out/'arranged.cdxml').write_text(arranged);(out/'decorated.cdxml').write_text(decorated)
+            (out/'arranged.cdxml').write_text(arranged,encoding='utf-8',newline='');(out/'decorated.cdxml').write_text(decorated,encoding='utf-8',newline='')
             _write_json(out/'layout.json',plan)
-            if show_work:
+            if same_document:
                 created=_native(bridge.finish_scope,did,measured,arranged,decorated,decoration)
             else:
                 # The desktop API targets visible active documents. Explicit
                 # background rendering retains the existing hidden-copy route.
                 _native(bridge.close,did);owned.remove(did)
                 audit['working_document_id']=None;_write_json(out/'audit.json',audit)
-                created=_native(bridge.create,decorated,visible=False)
+                created=_native(bridge.create,decorated,visible=show_work)
                 did=created['document']['document_id'];owned.append(did)
                 audit['working_document_id']=did;_write_json(out/'audit.json',audit)
             figure=out/'figure';figure.mkdir();cdxml=figure/'figure.cdxml'
-            _native(bridge.export,did,str(cdxml),'cdxml');native=cdxml.read_text()
+            _native(bridge.export,did,str(cdxml),'cdxml');native=cdxml.read_text(encoding='utf-8')
             verification=verify_scope_decoration(arranged,native,decoration)
             root=ET.fromstring(native);page=root.find('page')
             extras=set(verification['id_map'][i] for i in decoration['label_ids'])
@@ -106,14 +110,14 @@ def draw_scope_table(bridge, structures, output_dir, *, groups, preset='house', 
             timer.mark('native_final_verification')
             artifacts={'cdxml':str(cdxml)}
             if exports!='canvas':
-                svg=figure/'figure.svg';_native(bridge.export,did,str(svg),'svg');raw=svg.read_text()
+                svg=figure/'figure.svg';_native(bridge.export,did,str(svg),'svg');raw=svg.read_text(encoding='utf-8')
                 (figure/'preview.png').write_bytes(rasterize_svg(raw,1200,background='white'))
                 artifacts.update(svg=str(svg),preview=str(figure/'preview.png'))
                 if exports=='full':
                     (figure/'figure.png').write_bytes(physical_png(raw,600));artifacts['png']=str(figure/'figure.png')
-                svg.write_text(physical_svg(raw)[0])
+                svg.write_text(physical_svg(raw)[0],encoding='utf-8',newline='')
                 post=out/'post-export.cdxml';_native(bridge.export,did,str(post),'cdxml')
-                verify_scope_decoration(arranged,post.read_text(),decoration)
+                verify_scope_decoration(arranged,post.read_text(encoding='utf-8'),decoration)
                 audit['checks']['native_svg_export']=True
             inventory=_native(bridge.documents)['documents']
             created['document']=next(d for d in inventory if d['document_id']==did)
@@ -129,8 +133,8 @@ def draw_scope_table(bridge, structures, output_dir, *, groups, preset='house', 
             result={'status':'completed','document':created['document'],'checks':audit['checks'],'audit':audit,
                 'artifacts':artifacts,'delivery':{'mode':exports,'export_tool':'chemdraw_export_figure'},
                 'timings':timer.report(),'visual_review':'required','output_dir':str(out),'group_plan':plan,
-                'presentation':{'measurement_documents':0 if show_work else 1,'final_documents':1,
-                    'same_working_document':show_work},
+                'presentation':{'measurement_documents':0 if same_document else 1,'final_documents':1,
+                    'same_working_document':same_document},
                 'note':'Complete framed table. Do not call decorate_scope or import the result again.'}
             _write_json(out/'audit.json',audit);_write_json(out/'result.json',result)
             return result

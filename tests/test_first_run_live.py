@@ -29,7 +29,7 @@ async def test_first_run_over_mcp_preserves_existing_documents(tmp_path):
                 return result.structuredContent or json.loads(result.content[0].text)
             baseline = await call('chemdraw_list_documents')
             final = int(subprocess.check_output(['osascript','-e','tell application "ChemDraw 23.0.1" to get id of (make new document)'],text=True))
-            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':final}))
+            (tmp_path/'owned-document.json').write_text(json.dumps({'document_id':final}),encoding='utf-8',newline='')
             succeeded = False
             try:
                 diagnostic=await call('chemdraw_doctor')
@@ -42,8 +42,8 @@ async def test_first_run_over_mcp_preserves_existing_documents(tmp_path):
                 assert result['visual_review'] == 'required'
                 assert result['environment']['native_connection'] == 'responding'
                 expected = sorted(x['canonical_smiles'] for x in prepare_structures(list(DEMO_STRUCTURES)))
-                assert chemical_signature(Path(result['artifacts']['cdxml']).read_text()) == expected
-                assert json.loads(Path(result['report']).read_text()) == result
+                assert chemical_signature(Path(result['artifacts']['cdxml']).read_text(encoding='utf-8')) == expected
+                assert json.loads(Path(result['report']).read_text(encoding='utf-8')) == result
                 for path in result['artifacts'].values():
                     assert Path(path).stat().st_size > 100
                 assert 'review' not in result

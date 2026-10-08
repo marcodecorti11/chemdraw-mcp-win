@@ -16,7 +16,9 @@ async def test_native_batch_with_rejection_and_all_export_formats(tmp_path):
     root=Path(__file__).parents[1]
     paths=[root/'examples/chlorobenzoic-acid.cdxml',root/'examples/messy-oxidation.cdxml']
     original=[p.read_bytes() for p in paths]
-    items=[{'key':f'Figure-{i+1}','source':str(p),'formats':['pdf','cdx']} for i,p in enumerate(paths)]
+    # Windows ChemDraw has no PDF export: request every other format and check the PDF refusal.
+    formats=['cdx'] if sys.platform=='win32' else ['pdf','cdx']
+    items=[{'key':f'Figure-{i+1}','source':str(p),'formats':formats} for i,p in enumerate(paths)]
     items.insert(1,{'key':'unsupported','source':str(tmp_path/'missing.cdxml')})
     params=StdioServerParameters(command=sys.executable,args=['-m','chemdraw_macos.server'],
         env=dict(os.environ,CHEMDRAW_MCP_WORKSPACE=str(tmp_path/'work')))
@@ -28,6 +30,11 @@ async def test_native_batch_with_rejection_and_all_export_formats(tmp_path):
                 assert not response.isError,response
                 return response.structuredContent or json.loads(response.content[0].text)
             baseline=await call('chemdraw_list_documents')
+            if sys.platform=='win32':
+                refused=await session.call_tool('chemdraw_batch_export',{'items':[{**items[0],'formats':['pdf']}],
+                                                                        'output_dir':str(tmp_path/'pdf-batch'),'pixels':1200})
+                assert refused.isError and 'PDF export is not available' in refused.content[0].text
+                assert not (tmp_path/'pdf-batch').exists()
             result=await call('chemdraw_batch_export',items=items,output_dir=str(tmp_path/'batch'),pixels=1200)
             assert result['status']=='partial_failure',result
             assert [r['status'] for r in result['items']]==['exported','rejected','exported'],result
@@ -35,7 +42,7 @@ async def test_native_batch_with_rejection_and_all_export_formats(tmp_path):
             for row in (result['items'][0],result['items'][2]):
                 assert all(row['checks'].values())
                 assert row['closed_working_document']
-                for fmt in ('cdxml','svg','png','pdf','cdx'):
+                for fmt in ['cdxml','svg','png']+formats:
                     assert (tmp_path/'batch'/row['key']/f'{row["key"]}.{fmt}').stat().st_size>0
             assert await call('chemdraw_list_documents')==baseline
             assert [p.read_bytes() for p in paths]==original

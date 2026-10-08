@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from chemdraw_macos.private_files import is_private  # POSIX mode 600 or a protected Windows DACL
 
 
 class Session:
@@ -56,11 +57,11 @@ def test_setup_never_overwrites_previous_download(tmp_path):
     downloads = tmp_path/'Downloads'
     downloads.mkdir()
     original = downloads/'ChemDraw MCP Native API.chemdrawaddin'
-    original.write_text('keep me')
+    original.write_text('keep me',encoding='utf-8',newline='')
     session = Session()
     run_setup(arguments(), session=session, home=tmp_path, input_fn=lambda p: '', stream=io.StringIO())
     exported = next(x['path'] for x in session.calls if x['action'] == 'export_installer')
-    assert Path(exported) != original and original.read_text() == 'keep me'
+    assert Path(exported) != original and original.read_text(encoding='utf-8') == 'keep me'
 
 
 def test_download_uniqueness_does_not_change_chemdraw_installation_name(tmp_path):
@@ -109,10 +110,10 @@ def test_selected_client_uses_stable_cli_server_without_desktop_launcher(tmp_pat
     args.client = ['codex']
     executable = tmp_path/'tools/bin/chemdraw-mcp-macos'
     executable.parent.mkdir(parents=True)
-    executable.write_text('fixture')
+    executable.write_text('fixture',encoding='utf-8',newline='')
     assert run_setup(args, session=session, home=tmp_path, input_fn=lambda p: '',
                      stream=io.StringIO(), executable=executable) == 0
-    config = tomllib.loads((tmp_path/'.codex/config.toml').read_text())
+    config = tomllib.loads((tmp_path/'.codex/config.toml').read_text(encoding='utf-8'))
     entry = config['mcp_servers']['glecko_chemdraw']
     assert entry['command'] == str(executable)
     assert entry['args'] == ['--profile', 'full']
@@ -164,21 +165,21 @@ def test_terminal_failure_saves_private_shareable_report(tmp_path):
                      input_fn=lambda _: '', stream=out) == 1
     reports = list((tmp_path/'Library/Logs/ChemDraw MCP').glob('*.txt'))
     assert len(reports) == 1
-    text = reports[0].read_text()
+    text = reports[0].read_text(encoding='utf-8')
     assert 'addin_timeout' in text and 'timestamp' in text and 'terminal' in text
     assert 'SECRET DRAWING' not in text and 'PRIVATE KEY' not in text
     assert str(reports[0]) in out.getvalue()
-    assert reports[0].stat().st_mode & 0o077 == 0
+    assert is_private(reports[0])
 
 
 def test_terminal_report_write_failure_keeps_copyable_report(tmp_path):
     from chemdraw_macos.terminal_setup import run_setup
     # An existing non-directory makes the report destination unusable.
-    (tmp_path/'Library').write_text('untouched')
+    (tmp_path/'Library').write_text('untouched',encoding='utf-8',newline='')
     out = io.StringIO()
     assert run_setup(arguments(), session=Session(busy=True), home=tmp_path,
                      input_fn=lambda _: '', stream=out) == 1
     assert 'Could not save diagnostics' in out.getvalue()
     assert 'BEGIN CHEMDRAW DIAGNOSTICS' in out.getvalue()
     assert '"status": "busy"' in out.getvalue()
-    assert (tmp_path/'Library').read_text() == 'untouched'
+    assert (tmp_path/'Library').read_text(encoding='utf-8') == 'untouched'

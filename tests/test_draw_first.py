@@ -91,7 +91,7 @@ def test_later_export_accepts_unchanged_rounded_frame_but_not_changed_or_unknown
     from pathlib import Path
     b=BatchBridge(tmp_path/'work')
     result=draw_scope_table(b,RECORDS,tmp_path/'out',groups=GROUPS,exports='canvas')
-    before=Path(result['artifacts']['cdxml']).read_text()
+    before=Path(result['artifacts']['cdxml']).read_text(encoding='utf-8')
     verify_export_snapshot(before,before)
     root=ET.fromstring(before);root.find('page/graphic').set('ShadowSize','800')
     with pytest.raises(ValueError):verify_export_snapshot(before,ET.tostring(root,encoding='unicode'))
@@ -125,7 +125,7 @@ def test_later_export_reads_explicit_document_without_active_tab_workaround(tmp_
         read=lambda did:pytest.fail('Unbound active-tab read'))
     monkeypatch.setattr(addin,'get_backend',lambda b:backend)
     monkeypatch.setattr(addin,'read_preserving_active',lambda b,did:events.append(did) or {'cdxml':xml})
-    monkeypatch.setattr(b,'export',lambda did,path,fmt:Path(path).write_text(SVG))
+    monkeypatch.setattr(b,'export',lambda did,path,fmt:Path(path).write_text(SVG,encoding='utf-8',newline=''))
     result=export_figure(b,42,tmp_path/'out')
     assert result['source_preserved'] and events==['ready',42,42]
 

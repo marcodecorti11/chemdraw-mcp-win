@@ -20,12 +20,13 @@ def test_native_grid_file_freezes_input_and_preserves_original(tmp_path):
     root=Path(__file__).parents[1]
     source=root/'examples/scope-input.cdxml'
     before=source.read_bytes()
-    recipe=json.loads((root/'examples/scope-recipe.json').read_text());recipe.pop('schema_version')
+    recipe=json.loads((root/'examples/scope-recipe.json').read_text(encoding='utf-8'));recipe.pop('schema_version')
     bridge=Bridge(workspace=tmp_path/'workspace');baseline=bridge.documents()
     final=None
     try:
         result=grid_file(bridge,source,str(tmp_path/'file-grid'),**recipe)
-        final=result['document']['document_id']
+        # Auto delivery closes its result when no visible document is open (background); close only an open one.
+        final=None if result.get('document_closed') else result['document']['document_id']
         assert result['audit']['status']=='checks_passed'
         assert result['audit']['checks']['source_file_unchanged']
         assert result['audit']['source_file_sha256']==hashlib.sha256(before).hexdigest()

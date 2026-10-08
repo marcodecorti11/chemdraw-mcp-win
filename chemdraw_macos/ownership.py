@@ -151,10 +151,10 @@ def move_document(bridge,document_id,output_dir,ownership,moves,expected_source_
     with getattr(bridge,'lock',nullcontext()):
         baseline = _native(bridge.inspect,document_id)['document']; disk_hash = _file_hash(baseline)
         snapshot = bridge._new_path('.cdxml','backups'); _native(bridge.export,document_id,str(snapshot),'cdxml')
-        source = snapshot.read_text()
+        source = snapshot.read_text(encoding='utf-8')
         if source_token(source) != expected_source_token: raise ValueError('Source snapshot is stale')
         planned,state,plan = plan_move(source,ownership,moves)
-        out.mkdir(); (out/'before.cdxml').write_text(source)
+        out.mkdir(); (out/'before.cdxml').write_text(source,encoding='utf-8',newline='')
         _write_json(out/'recipe.json',{'schema_version':1,'ownership':ownership,'moves':moves,'expected_source_token':expected_source_token,'pixels':pixels})
         audit['plan'] = plan; _write_json(out/'audit.json',audit)
         try:
@@ -162,16 +162,16 @@ def move_document(bridge,document_id,output_dir,ownership,moves,expected_source_
             result = _native(bridge.create,planned); created = result['document']['document_id']
             audit['working_document_id'] = created; _write_json(out/'audit.json',audit)
             for fmt in ('svg','png','cdxml'): _native(bridge.export,created,str(out/f'figure.{fmt}'),fmt,pixels)
-            final = (out/'figure.cdxml').read_text(); verification = verify_symbols(planned,final)
+            final = (out/'figure.cdxml').read_text(encoding='utf-8'); verification = verify_symbols(planned,final)
             _page_fit(ann._root(final))
             final_state = _remap_state(state,final,verification['id_map'])
             after = bridge._new_path('.cdxml','backups'); _native(bridge.export,document_id,str(after),'cdxml')
-            if source_token(after.read_text()) != expected_source_token or _native(bridge.inspect,document_id)['document'] != baseline or _file_hash(baseline) != disk_hash:
+            if source_token(after.read_text(encoding='utf-8')) != expected_source_token or _native(bridge.inspect,document_id)['document'] != baseline or _file_hash(baseline) != disk_hash:
                 raise ValueError('Source changed during owned movement')
             audit.update(status='checks_passed',native_verification=verification,limitations=plan['collision_review'],native_manual_drag_attachment='not_verified')
             audit['checks'].update(verification['checks'],source_document_unchanged=True,ownership_remapped=True,native_page_bounds=True)
             _write_json(out/'ownership.json',final_state); _write_json(out/'audit.json',audit)
-            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Owned movement</title><h1>Owned movement copy</h1><p>Visual collision review required. Ownership sidecar controls future tool moves, not manual ChemDraw attachment.</p><img width="48%" src="before.png"><img width="48%" src="figure.png"><p><a href="figure.cdxml">Editable figure</a> <a href="ownership.json">Ownership</a> <a href="audit.json">Audit</a></p>')
+            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Owned movement</title><h1>Owned movement copy</h1><p>Visual collision review required. Ownership sidecar controls future tool moves, not manual ChemDraw attachment.</p><img width="48%" src="before.png"><img width="48%" src="figure.png"><p><a href="figure.cdxml">Editable figure</a> <a href="ownership.json">Ownership</a> <a href="audit.json">Audit</a></p>',encoding='utf-8',newline='')
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'ownership':final_state,'audit':audit}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),recovery='No retry or automatic close; inspect owned copies and snapshots')
@@ -195,7 +195,7 @@ def move_file(bridge,path,output_dir,ownership,moves,expected_source_token=None,
     with getattr(bridge,'lock',nullcontext()):
         result = _native(bridge.create,source); did = result['document']['document_id']; uncertain = False; completed = None
         try:
-            snapshot = bridge._new_path('.cdxml','backups'); _native(bridge.export,did,str(snapshot),'cdxml'); native = snapshot.read_text()
+            snapshot = bridge._new_path('.cdxml','backups'); _native(bridge.export,did,str(snapshot),'cdxml'); native = snapshot.read_text(encoding='utf-8')
             mapped = _remap_state(ownership,native,verify_symbols(source,native)['id_map'])
             if path.read_bytes() != data: raise ValueError('Source file changed during import')
             completed = move_document(bridge,did,output_dir,mapped,moves,source_token(native),pixels)

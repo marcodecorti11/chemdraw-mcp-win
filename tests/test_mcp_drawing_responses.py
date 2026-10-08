@@ -26,7 +26,7 @@ def completed(tmp_path):
                   'warnings': ['Review stereochemistry.'],
                   'planning': {'seeds': ['x' * 1000] * 16}},
     }
-    (tmp_path / 'result.json').write_text(json.dumps(result))
+    (tmp_path / 'result.json').write_text(json.dumps(result),encoding='utf-8',newline='')
     return result
 
 
@@ -56,7 +56,7 @@ def test_mcp_success_compact_but_full_result_retained(tmp_path, monkeypatch, nam
     assert result['audit'] == {k: v for k, v in before['audit'].items() if k != 'planning'}
     assert len(json.dumps(result)) < len(json.dumps(full)) / 10
     assert full == before
-    assert json.loads((tmp_path / 'result.json').read_text()) == before
+    assert json.loads((tmp_path / 'result.json').read_text(encoding='utf-8')) == before
 
 
 @pytest.mark.parametrize('status', ['needs_input', 'rejected', 'uncertain', 'failed'])

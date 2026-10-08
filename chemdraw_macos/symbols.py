@@ -59,7 +59,7 @@ def symbol_inventory(text):
 @native_transaction
 def inspect_symbols_document(bridge,document_id):
     snapshot=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(snapshot),'cdxml')
-    return {**symbol_inventory(snapshot.read_text()),'snapshot':str(snapshot),'document':_native(bridge.inspect,document_id)['document']}
+    return {**symbol_inventory(snapshot.read_text(encoding='utf-8')),'snapshot':str(snapshot),'document':_native(bridge.inspect,document_id)['document']}
 
 
 def _distance_segment(p,a,b):
@@ -264,10 +264,10 @@ def symbols_document(bridge,document_id,output_dir,symbols,expected_source_token
     out=_destination(output_dir,pixels);created=None;audit={'status':'in_progress','checks':{},'visual_review':'required'}
     with getattr(bridge,'lock',nullcontext()):
         baseline=_native(bridge.inspect,document_id)['document'];disk_hash=_file_hash(baseline)
-        snapshot=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(snapshot),'cdxml');source=snapshot.read_text()
+        snapshot=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(snapshot),'cdxml');source=snapshot.read_text(encoding='utf-8')
         if source_token(source)!=expected_source_token:raise ValueError('Source snapshot is stale; inspect symbols again')
         planned,plan=plan_symbols(source,symbols,span,line_width,clearance)
-        out.mkdir();(out/'before.cdxml').write_text(source);audit['plan']=plan
+        out.mkdir();(out/'before.cdxml').write_text(source,encoding='utf-8',newline='');audit['plan']=plan
         _write_json(out/'recipe.json',{'schema_version':1,'symbols':symbols,'expected_source_token':expected_source_token,'span':span,'line_width':line_width,'clearance':clearance,'pixels':pixels})
         _write_json(out/'audit.json',audit)
         try:
@@ -277,15 +277,15 @@ def symbols_document(bridge,document_id,output_dir,symbols,expected_source_token
             # Render exports may trigger native normalization. Verify the saved
             # working document only after those exports have completed.
             for fmt in ('svg','png','cdxml'):_native(bridge.export,created,str(out/f'figure.{fmt}'),fmt,pixels)
-            verification=verify_symbols(planned,(out/'figure.cdxml').read_text());audit['checks'].update(verification['checks']);audit['native_verification']=verification
+            verification=verify_symbols(planned,(out/'figure.cdxml').read_text(encoding='utf-8'));audit['checks'].update(verification['checks']);audit['native_verification']=verification
             native_ids=[verification['id_map'][s['symbol_id']] for s in plan['symbols']]
-            audit['native_clearance']=verify_symbol_clearance((out/'figure.cdxml').read_text(),native_ids,clearance)
+            audit['native_clearance']=verify_symbol_clearance((out/'figure.cdxml').read_text(encoding='utf-8'),native_ids,clearance)
             audit['checks']['native_symbol_clearance']=True
             check=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(check),'cdxml')
-            if source_token(check.read_text())!=expected_source_token or _native(bridge.inspect,document_id)['document']!=baseline or _file_hash(baseline)!=disk_hash:raise ValueError('Source changed during symbol creation')
+            if source_token(check.read_text(encoding='utf-8'))!=expected_source_token or _native(bridge.inspect,document_id)['document']!=baseline or _file_hash(baseline)!=disk_hash:raise ValueError('Source changed during symbol creation')
             audit['checks']['source_document_unchanged']=True;audit['status']='checks_passed'
             _write_json(out/'audit.json',audit)
-            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Native symbols</title><h1>Native symbol copy</h1><p>Visual review required. Dots are graphical annotations, not radical-state edits.</p><img width="48%" src="before.png"><img width="48%" src="figure.png"><p><a href="figure.cdxml">Editable ChemDraw</a> <a href="figure.svg">SVG</a> <a href="audit.json">Audit</a></p>')
+            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Native symbols</title><h1>Native symbol copy</h1><p>Visual review required. Dots are graphical annotations, not radical-state edits.</p><img width="48%" src="before.png"><img width="48%" src="figure.png"><p><a href="figure.cdxml">Editable ChemDraw</a> <a href="figure.svg">SVG</a> <a href="audit.json">Audit</a></p>',encoding='utf-8',newline='')
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),recovery='No retry or close; inspect working documents and snapshots')
@@ -308,7 +308,7 @@ def symbols_file(bridge,path,output_dir,symbols,expected_source_token=None,span=
     if expected_source_token is not None and source_token(source)!=expected_source_token:raise ValueError('File snapshot is stale')
     result=_native(bridge.create,source);did=result['document']['document_id'];uncertain=False;completed=None
     try:
-        report=inspect_symbols_document(bridge,did);native=Path(report['snapshot']).read_text();mapping=verify_symbols(source,native)['id_map']
+        report=inspect_symbols_document(bridge,did);native=Path(report['snapshot']).read_text(encoding='utf-8');mapping=verify_symbols(source,native)['id_map']
         if path.read_bytes()!=data:raise ValueError('Source file changed during import')
         mapped=[{**r,'atom_id':mapping[r['atom_id']]} for r in symbols]
         completed=symbols_document(bridge,did,output_dir,mapped,source_token(native),span,line_width,clearance,pixels)

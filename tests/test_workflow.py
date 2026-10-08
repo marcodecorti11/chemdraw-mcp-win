@@ -19,7 +19,7 @@ class FakeBridge:
         self.counter+=1;p=self.workspace/category/f'{self.counter}{suffix}';p.parent.mkdir(parents=True,exist_ok=True);return p
     def export(self,did,path,format,pixels=3200):
         self.events.append(('export',did,format))
-        Path(path).write_text(self.docs[did] if format=='cdxml' else '<svg/>' if format=='svg' else 'image')
+        Path(path).write_text(self.docs[did] if format=='cdxml' else '<svg/>' if format=='svg' else 'image',encoding='utf-8',newline='')
         return {'path':str(path)}
     def create(self,cdxml):
         self.counter+=1;self.docs[self.counter]=cdxml;self.managed.add(self.counter)
@@ -55,7 +55,7 @@ def test_native_chemistry_change_fails_without_a_success_result(tmp_path):
     with pytest.raises(ValueError,match='chemistry'):
         polish_document(b,1,str(tmp_path/'out'))
     assert b.docs[1]==SAMPLE
-    assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='failed'
+    assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='failed'
 
 
 def test_object_ids_can_change_on_native_import():
@@ -93,11 +93,11 @@ def test_mcp_exposes_workflow_and_diagnostic_tools():
 
 
 def test_cli_input_recipe_uses_original_file_ids_after_native_renumbering(tmp_path,monkeypatch,capsys):
-    source=tmp_path/'source.cdxml';source.write_text(SAMPLE)
-    recipe=tmp_path/'recipe.json';recipe.write_text(json.dumps({'layout':'row','caption_map':{'1':'10','20':'30'}}))
+    source=tmp_path/'source.cdxml';source.write_text(SAMPLE,encoding='utf-8',newline='')
+    recipe=tmp_path/'recipe.json';recipe.write_text(json.dumps({'layout':'row','caption_map':{'1':'10','20':'30'}}),encoding='utf-8',newline='')
     b=FakeBridge(tmp_path/'work')
     def imported(path):
-        r=ET.fromstring(Path(path).read_text())
+        r=ET.fromstring(Path(path).read_text(encoding='utf-8'))
         for e in r.find('page').iter():
             for k in ('id','B','E'):
                 if e.get(k):e.set(k,str(int(e.get(k))+1000))
@@ -109,7 +109,7 @@ def test_cli_input_recipe_uses_original_file_ids_after_native_renumbering(tmp_pa
 
 
 def test_cli_validates_cdxml_before_native_import_can_drop_unsupported_features(tmp_path,monkeypatch):
-    source=tmp_path/'query.cdxml';source.write_text(SAMPLE.replace('id="2"','id="2" RingBondCount="2"'))
+    source=tmp_path/'query.cdxml';source.write_text(SAMPLE.replace('id="2"','id="2" RingBondCount="2"'),encoding='utf-8',newline='')
     b=FakeBridge(tmp_path/'work');calls=[]
     def imported(path):
         calls.append(path)

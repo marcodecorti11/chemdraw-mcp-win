@@ -10,7 +10,7 @@ from chemdraw_macos.editing import source_token
 from chemdraw_macos.batch import NativeUncertain
 from test_batch import BatchBridge
 
-RAW=(Path(__file__).parents[1]/'examples/sn2-annotation-input.cdxml').read_text()
+RAW=(Path(__file__).parents[1]/'examples/sn2-annotation-input.cdxml').read_text(encoding='utf-8')
 
 def source():
     root=ET.fromstring(RAW)
@@ -51,7 +51,7 @@ def test_nitro_charge_is_closest_to_owner_label_not_only_atom_anchor():
 def test_crowded_nitro_charges_fit_without_smaller_symbols_or_changed_owners():
     import math
     from chemdraw_macos.draw import charge_requests
-    text=(Path(__file__).parent/'fixtures/nitrobenzene-measured.cdxml').read_text()
+    text=(Path(__file__).parent/'fixtures/nitrobenzene-measured.cdxml').read_text(encoding='utf-8')
     planned,plan=plan_symbols(text,charge_requests(text))
     assert plan['span_pt']==10.5 and plan['line_width_pt']==1.58
     root=ET.fromstring(planned)
@@ -146,12 +146,12 @@ def test_native_uncertainty_no_retry_or_close(tmp_path):
     b.export=fail
     with pytest.raises(NativeUncertain):symbols_document(b,1,str(tmp_path/'out'),REQUESTS,source_token(source()))
     assert len(b.managed)==1 and not any(e[0]=='close' for e in b.events)
-    assert json.loads((tmp_path/'out/audit.json').read_text())['status']=='uncertain'
+    assert json.loads((tmp_path/'out/audit.json').read_text(encoding='utf-8'))['status']=='uncertain'
 
 def test_file_copy(tmp_path):
-    path=tmp_path/'input.cdxml';path.write_text(source());b=BatchBridge(tmp_path/'work')
+    path=tmp_path/'input.cdxml';path.write_text(source(),encoding='utf-8',newline='');b=BatchBridge(tmp_path/'work')
     result=symbols_file(b,str(path),str(tmp_path/'out'),REQUESTS)
-    assert result['audit']['checks']['source_file_unchanged'] and path.read_text()==source()
+    assert result['audit']['checks']['source_file_unchanged'] and path.read_text(encoding='utf-8')==source()
     assert len(b.managed)==1
 
 def arrow_for(sid,electrons=2):
@@ -185,7 +185,7 @@ def test_annotation_inspection_exposes_symbol_ids_and_charge():
     assert report['symbols'][0]['kind']=='CircleMinus'
 
 def test_file_uncertainty_preserves_both_owned_documents(tmp_path):
-    path=tmp_path/'input.cdxml';path.write_text(source());b=BatchBridge(tmp_path/'work');export=b.export
+    path=tmp_path/'input.cdxml';path.write_text(source(),encoding='utf-8',newline='');b=BatchBridge(tmp_path/'work');export=b.export
     def fail(did,path,format,pixels=3200):
         if Path(path).name=='figure.svg':raise RuntimeError('timeout')
         return export(did,path,format,pixels)

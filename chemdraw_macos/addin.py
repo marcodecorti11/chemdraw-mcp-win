@@ -14,6 +14,7 @@ import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import secrets
+import sys
 import threading
 import xml.etree.ElementTree as ET
 import zipfile
@@ -21,6 +22,7 @@ import zipfile
 from .core import validate_cdxml, document_row
 from .shared import _page, fingerprint
 from .polish import bounds, chemical_signature
+from .private_files import is_private, make_private
 
 
 def source_token(text):
@@ -37,7 +39,7 @@ def prepare_payload(before, addition, *, allow_page_expansion=False):
     chemical_signature(addition)
     if not len(added):
         raise ValueError('Empty addition')
-    ignored={'Name','CreationProgram','WindowPosition','WindowSize','BoundingBox','MacPrintInfo'}
+    ignored={'Name','CreationProgram','WindowPosition','WindowSize','WindowIsZoomed','BoundingBox','MacPrintInfo'}
     for key,value in incoming.attrib.items():
         if key not in ignored and target.get(key)!=value:
             raise ValueError('Addition must use working-document settings: '+key)
@@ -96,6 +98,16 @@ def prepare_payload(before, addition, *, allow_page_expansion=False):
     return ET.tostring(result,encoding='unicode')
 
 
+class _LoopbackServer(ThreadingHTTPServer):
+    """Windows SO_REUSEADDR lets another process bind an occupied port; require exclusive use there."""
+    if sys.platform=='win32':
+        allow_reuse_address=False
+        def server_bind(self):
+            import socket
+            self.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1)
+            super().server_bind()
+
+
 class AddinChannel:
     MAX_BYTES=10_000_000
 
@@ -150,7 +162,7 @@ class AddinChannel:
                         return self.reply(409,{})
                     owner._result=value;owner._event.set()
                 self.reply(200,{'ok':True})
-        self.server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
+        self.server=_LoopbackServer(('127.0.0.1',port),Handler)
         self.server.daemon_threads=True
         self.address='127.0.0.1:'+str(self.server.server_port)
         self.url='http://'+self.address
@@ -202,6 +214,10 @@ def read_preserving_active(bridge, document_id):
     """
     with bridge.lock:
         backend=get_backend(bridge)
+        direct=getattr(backend,'read_explicit',None)
+        if direct is not None:
+            # Windows COM reads any document directly; no tab switch is needed or made.
+            return direct(document_id)
         # Opening the modeless connection can change ChemDraw's active tab.
         # Establish it first, then bind and restore the explicit read target.
         ready=getattr(backend,'_ready',None)
@@ -247,14 +263,14 @@ def append_document(bridge,channel,document_id,cdxml,expected_source_token,*,all
         if initial['source_token']!=expected_source_token:
             raise ValueError('Working document changed; read it again before appending')
         before=initial['cdxml'];payload=prepare_payload(before,cdxml,allow_page_expansion=allow_page_expansion)
-        backup=bridge._new_path('.cdxml','backups');backup.write_text(before)
+        backup=bridge._new_path('.cdxml','backups');backup.write_text(before,encoding='utf-8',newline='')
         result=channel.request('append',expected=before,cdxml=payload)
         if result.get('error'):
             if result.get('write_attempted'):raise NativeUncertain('API append uncertain: '+result['error'])
             raise ValueError('API append refused before write: '+result['error'])
         try:
             after=result['cdxml']
-            snapshot=bridge._new_path('.cdxml','backups');snapshot.write_text(after)
+            snapshot=bridge._new_path('.cdxml','backups');snapshot.write_text(after,encoding='utf-8',newline='')
             if bridge._run('active_document')!=document_id:raise ValueError('Active document changed')
             checks=verify_append(before,after,payload,exact_coordinates=True,allow_page_expansion=allow_page_expansion)
             doc=next(d for d in bridge.documents()['documents'] if d['document_id']==document_id)
@@ -274,7 +290,7 @@ def prepare_addin(channel,directory,*,install_assets=True):
     metadata={'name':'ChemDraw MCP Native API','description':'Local MCP desktop API bridge','version':'0.1',
               'menuItemText':'ChemDraw MCP Native API','minimumAPIVersion':'1.6','url':'main.html',
               'isModalDialog':False,'canBeUninstalled':True}
-    script=Path(__file__).with_name('addin_client.js').read_text()
+    script=Path(__file__).with_name('addin_client.js').read_text(encoding='utf-8')
     config=json.dumps({'url':channel.url,'secret':channel.secret})
     html=('<!doctype html><meta charset="utf-8"><title>ChemDraw MCP</title>'
           '<style>body{margin:10px;background:#29252f;color:#eee9e5;font:12px -apple-system,sans-serif}'
@@ -286,8 +302,8 @@ def prepare_addin(channel,directory,*,install_assets=True):
         path=directory/name
         if path.is_symlink():raise ValueError('Refusing symlinked add-in asset')
         # Assets belong to this installed bridge; refresh the local session endpoint.
-        with open(path,'w',opener=lambda p,flags: os.open(p,flags,0o600)) as f:f.write(text)
-        path.chmod(0o600)
+        with open(path,'w',encoding='utf-8',opener=lambda p,flags: os.open(p,flags,0o600)) as f:f.write(text)
+        make_private(path)
     # The source ZIP must survive the installer's replacement of its destination.
     staging=directory.with_name(directory.name+' Installer')
     if staging.is_symlink():raise ValueError('Refusing symlinked installer directory')
@@ -305,7 +321,7 @@ def prepare_addin(channel,directory,*,install_assets=True):
         os.replace(temporary,package)
     finally:
         if os.path.exists(temporary):os.unlink(temporary)
-    package.chmod(0o600)
+    make_private(package)
     return package
 
 
@@ -316,7 +332,7 @@ def installed_addin_directory(directory):
         return directory
     connection = directory.with_name(directory.name + '.connection.json')
     if not connection.is_file() or connection.is_symlink(): return directory
-    config = json.loads(connection.read_text())
+    config = json.loads(connection.read_text(encoding='utf-8'))
     expected_url = 'http://127.0.0.1:' + str(config['port'])
     matches = []
     for candidate in directory.parent.iterdir():
@@ -325,9 +341,9 @@ def installed_addin_directory(directory):
         metadata, html = candidate/'chemdraw-addin-metadata.json', candidate/'main.html'
         if any(p.is_symlink() or not p.is_file() for p in (metadata, html)): continue
         try:
-            info = json.loads(metadata.read_text())
+            info = json.loads(metadata.read_text(encoding='utf-8'))
             if info.get('name') != 'ChemDraw MCP Native API' or info.get('url') != 'main.html': continue
-            text = html.read_text()
+            text = html.read_text(encoding='utf-8')
             marker = 'const config='
             if marker not in text: continue
             embedded, _ = json.JSONDecoder().raw_decode(text.split(marker, 1)[1])
@@ -352,8 +368,8 @@ class DesktopAddin:
         connection=self.directory.with_name(self.directory.name+'.connection.json')
         if connection.is_symlink():raise ValueError('Refusing symlinked add-in credentials')
         if connection.exists():
-            if connection.stat().st_mode & 0o077:raise ValueError('Add-in credentials must be private (mode 600)')
-            config=json.loads(connection.read_text())
+            if not is_private(connection):raise ValueError('Add-in credentials must be private (mode 600)')
+            config=json.loads(connection.read_text(encoding='utf-8'))
             if (set(config)!={'secret','port'} or not isinstance(config['secret'],str) or
                     len(config['secret'])<40 or type(config['port']) is not int or not 1024<=config['port']<=65535):
                 raise ValueError('Invalid local add-in credentials')
@@ -361,8 +377,9 @@ class DesktopAddin:
         else:
             self.channel=AddinChannel()
             try:
-                with open(connection,'x',opener=lambda p,flags:os.open(p,flags,0o600)) as f:
+                with open(connection,'x',encoding='utf-8',opener=lambda p,flags:os.open(p,flags,0o600)) as f:
                     json.dump({'secret':self.channel.secret,'port':self.channel.server.server_port},f)
+                make_private(connection)
             except Exception:
                 self.channel.close();raise
         self.opened=False;self.closed=False
@@ -413,6 +430,11 @@ def get_backend(bridge,*,setup=False):
     import atexit
     backend=getattr(bridge,'_desktop_addin',None)
     if backend is None or backend.closed:
+        if sys.platform=='win32':
+            # Windows ChemDraw exposes read/append through COM; no add-in package or loopback port.
+            from .windows_backend import ComBackend
+            backend=ComBackend(bridge);bridge._desktop_addin=backend
+            return backend
         backend=DesktopAddin(bridge,setup=True) if setup else DesktopAddin(bridge)
         bridge._desktop_addin=backend
         atexit.register(backend.close)

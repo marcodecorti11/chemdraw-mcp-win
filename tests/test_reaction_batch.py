@@ -57,7 +57,7 @@ class BatchBridge(ReactionBridge):
         from pathlib import Path
         if fmt=='svg':
             self.events.append(('export',did,fmt))
-            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"/>')
+            Path(path).write_text('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"/>',encoding='utf-8',newline='')
         else:super().export(did,path,fmt,pixels)
 
 
@@ -114,9 +114,9 @@ def test_mismatched_native_physical_paper_cannot_pass(tmp_path):
             super().export(did,path,fmt,pixels)
             if fmt=='cdxml' and str(path).endswith('figure.cdxml'):
                 from pathlib import Path
-                p=Path(path);root=ET.fromstring(p.read_text())
+                p=Path(path);root=ET.fromstring(p.read_text(encoding='utf-8'))
                 record=list(struct.unpack('>60h',bytes.fromhex(root.get('MacPrintInfo'))));record[11]-=10
-                root.set('MacPrintInfo',struct.pack('>60h',*record).hex());p.write_text(ET.tostring(root,encoding='unicode'))
+                root.set('MacPrintInfo',struct.pack('>60h',*record).hex());p.write_text(ET.tostring(root,encoding='unicode'),encoding='utf-8',newline='')
     with pytest.raises(ValueError,match='physical paper'):
         run_reaction_batch(WrongPaper(tmp_path/'work'),reaction(),tmp_path/'out')
 
@@ -257,7 +257,7 @@ def test_circled_reaction_rejects_a_native_symbol_moved_onto_a_bond(tmp_path):
                 root=ET.parse(path).getroot()
                 symbol=root.find('page/fragment/graphic')
                 if symbol is not None:symbol.set('BoundingBox','0 0 10.5 0')
-                Path(path).write_text(ET.tostring(root,encoding='unicode'))
+                Path(path).write_text(ET.tostring(root,encoding='unicode'),encoding='utf-8',newline='')
     steps=[{'step_id':'charged','reactants':[item('a','Acetate','CC(=O)[O-]')],
             'products':[item('b','Acetic acid','CC(=O)O')]}]
     b=CollidingCharge(tmp_path/'work')

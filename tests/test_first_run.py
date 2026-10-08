@@ -33,7 +33,7 @@ def setup_run(tmp_path, monkeypatch):
         artifacts = {}
         for fmt in ('cdxml', 'svg', 'png'):
             p = out / ('figure.' + fmt)
-            p.write_text('test fixture')
+            p.write_text('test fixture',encoding='utf-8',newline='')
             artifacts[fmt] = str(p)
         return {'document': {'document_id': 99},
                 'output_dir': str(out), 'artifacts': artifacts,
@@ -53,7 +53,7 @@ def test_first_run_creates_unique_reviewable_result(setup_run):
     assert stages[:4] == ['installation', 'connection', 'drawing', 'exports']
     assert all(r['status'] == 'checks_passed' for r in results)
     assert results[0]['visual_review'] == 'required'
-    assert json.loads(Path(results[0]['report']).read_text()) == results[0]
+    assert json.loads(Path(results[0]['report']).read_text(encoding='utf-8')) == results[0]
     assert 'review' not in results[0]
     assert not list(Path(results[0]['output_dir']).glob('*.html'))
 
@@ -72,10 +72,10 @@ def test_failed_installation_never_connects_or_creates_files(setup_run, field, v
 
 def test_existing_destination_is_preserved_without_connecting(setup_run, tmp_path):
     f, env, bridge, calls = setup_run
-    marker = tmp_path / 'keep.txt'; marker.write_text('untouched')
+    marker = tmp_path / 'keep.txt'; marker.write_text('untouched',encoding='utf-8',newline='')
     with pytest.raises(f.FirstRunError):
         f.run_first_run(str(tmp_path), bridge_factory=lambda: bridge)
-    assert marker.read_text() == 'untouched' and not calls
+    assert marker.read_text(encoding='utf-8') == 'untouched' and not calls
 
 
 @pytest.mark.parametrize('failure,status', [('busy', 'busy'), ('uncertain', 'uncertain')])

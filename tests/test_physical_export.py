@@ -73,7 +73,7 @@ def test_pdf_uses_owned_hidden_copy_and_preserves_source(monkeypatch,tmp_path):
             calls.append('create');return {'document':{'document_id':456}}
         def export(self,did,path,fmt):
             from pathlib import Path
-            calls.append((did,fmt));Path(path).write_text(SVG if fmt=='svg' else '%PDF-1.4')
+            calls.append((did,fmt));Path(path).write_text(SVG if fmt=='svg' else '%PDF-1.4',encoding='utf-8',newline='')
         def close(self,did):
             assert did==456;calls.append('close')
     monkeypatch.setattr(addin,'get_backend',lambda b: SimpleNamespace(read=lambda did: {'cdxml':xml}))

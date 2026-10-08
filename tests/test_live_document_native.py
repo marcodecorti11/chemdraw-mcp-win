@@ -19,7 +19,7 @@ SOURCE=Path(__file__).parents[1]/'examples/chlorobenzoic-acid.cdxml'
 @pytest.mark.asyncio
 async def test_existing_document_and_external_changes_through_mcp(tmp_path):
     owner=Bridge(); baseline=owner.documents()
-    did=owner.create(SOURCE.read_text())['document']['document_id']
+    did=owner.create(SOURCE.read_text(encoding='utf-8'))['document']['document_id']
     params=StdioServerParameters(command=sys.executable,args=['-m','chemdraw_macos.server','--profile','core'],env=dict(os.environ))
     async with stdio_client(params) as (read,write):
         async with ClientSession(read,write) as session:

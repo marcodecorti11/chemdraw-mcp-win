@@ -17,7 +17,7 @@ class BatchBridge(FakeBridge):
 def entries(tmp_path, count=2):
     result=[]
     for i in range(count):
-        p=tmp_path/f'source{i}.cdxml';p.write_text(SAMPLE)
+        p=tmp_path/f'source{i}.cdxml';p.write_text(SAMPLE,encoding='utf-8',newline='')
         result.append({'key':f'fig-{i+1}','source':str(p),'formats':['pdf','cdx']})
     return result
 
@@ -33,11 +33,11 @@ def test_batch_native_exports_and_contact_sheet(tmp_path):
         folder=tmp_path/'out'/item['key']
         for fmt in ('cdxml','svg','png','pdf','cdx'):
             assert (folder/f'{item["key"]}.{fmt}').is_file()
-        audit=json.loads((folder/'audit.json').read_text())
+        audit=json.loads((folder/'audit.json').read_text(encoding='utf-8'))
         assert audit['checks']['mapped_chemistry_preserved']
         assert audit['checks']['source_file_unchanged']
-        assert Path(item['source']).read_text()==SAMPLE
-    page=(tmp_path/'out'/'review.html').read_text()
+        assert Path(item['source']).read_text(encoding='utf-8')==SAMPLE
+    page=(tmp_path/'out'/'review.html').read_text(encoding='utf-8')
     assert 'fig-1/fig-1.png' in page and 'Visual review' in page
     assert len([e for e in b.events if e[0]=='create'])==2
     assert not b.managed
@@ -60,7 +60,7 @@ def test_case_insensitive_duplicate_keys_and_existing_destination(tmp_path):
 
 def test_unsupported_and_missing_inputs_reported_while_valid_items_export(tmp_path):
     items=entries(tmp_path,3)
-    Path(items[1]['source']).write_text('<CDXML><page><group/></page></CDXML>')
+    Path(items[1]['source']).write_text('<CDXML><page><group/></page></CDXML>',encoding='utf-8',newline='')
     items[2]['source']=str(tmp_path/'missing.cdxml')
     b=BatchBridge(tmp_path/'work');r=batch_export(b,items,str(tmp_path/'out'))
     assert r['status']=='partial_failure'
@@ -79,7 +79,7 @@ def test_uncertain_native_write_stops_batch_without_retry_or_cleanup(tmp_path):
     assert [v['status'] for v in r['items']]==['uncertain','not_run','not_run']
     assert len(b.managed)==1
     assert not any(e[0]=='close' for e in b.events)
-    assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='interrupted'
+    assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='interrupted'
     assert r['checks']['preexisting_documents_unchanged'] is None
 
 
@@ -94,7 +94,7 @@ def test_import_changes_chemistry_reports_failed_item_not_success(tmp_path):
 def test_source_file_modified_during_export_not_claimed_preserved(tmp_path):
     items=entries(tmp_path,1);b=BatchBridge(tmp_path/'work');export=b.export
     def change(did,path,format,pixels=3200):
-        if format=='png':Path(items[0]['source']).write_text(SAMPLE+'\n')
+        if format=='png':Path(items[0]['source']).write_text(SAMPLE+'\n',encoding='utf-8',newline='')
         return export(did,path,format,pixels)
     b.export=change
     r=batch_export(b,items,str(tmp_path/'out'))
@@ -107,7 +107,7 @@ def test_batch_cli_and_mcp_exposed(tmp_path,monkeypatch,capsys):
     from chemdraw_macos.server import mcp
     assert 'chemdraw_batch_export' in {t.name for t in asyncio.run(mcp.list_tools())}
     items=entries(tmp_path);manifest=tmp_path/'manifest.json'
-    manifest.write_text(json.dumps({'schema_version':1,'items':items,'pixels':1200}))
+    manifest.write_text(json.dumps({'schema_version':1,'items':items,'pixels':1200}),encoding='utf-8',newline='')
     monkeypatch.setattr(cli,'Bridge',lambda:BatchBridge(tmp_path/'work'))
     assert cli.main(['batch','--manifest',str(manifest),'--output',str(tmp_path/'out')])==0
     assert json.loads(capsys.readouterr().out)['status']=='completed'
@@ -116,7 +116,7 @@ def test_batch_cli_and_mcp_exposed(tmp_path,monkeypatch,capsys):
 def test_batch_cli_partial_failure_is_nonzero(tmp_path,monkeypatch,capsys):
     from chemdraw_macos import cli
     items=entries(tmp_path,1);items[0]['source']=str(tmp_path/'absent.cdxml')
-    manifest=tmp_path/'manifest.json';manifest.write_text(json.dumps({'items':items}))
+    manifest=tmp_path/'manifest.json';manifest.write_text(json.dumps({'items':items}),encoding='utf-8',newline='')
     monkeypatch.setattr(cli,'Bridge',lambda:BatchBridge(tmp_path/'work'))
     assert cli.main(['batch','--manifest',str(manifest),'--output',str(tmp_path/'out')])==1
     assert json.loads(capsys.readouterr().out)['status']=='partial_failure'

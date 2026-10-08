@@ -24,19 +24,20 @@ def test_selected_clients_share_runtime_and_preserve_other_settings(tmp_path):
     codex.parent.mkdir()
     original_json = '{"preferences":{"theme":"dark"},"mcpServers":{"other":{"command":"other"}}}'
     original_toml = '# Keep my comments\nmodel = "my-model"\n[mcp_servers.other]\ncommand = "other"\n'
-    claude.write_text(original_json)
-    codex.write_text(original_toml)
+    claude.write_text(original_json,encoding='utf-8',newline='')
+    codex.write_text(original_toml,encoding='utf-8',newline='')
     result = connect_clients(['claude', 'codex'], runtime, home=tmp_path)
-    a = json.loads(claude.read_text())
-    b = tomllib.loads(codex.read_text())
+    a = json.loads(claude.read_text(encoding='utf-8'))
+    b = tomllib.loads(codex.read_text(encoding='utf-8'))
     assert a['preferences'] == {'theme': 'dark'}
     assert a['mcpServers']['other'] == b['mcp_servers']['other'] == {'command': 'other'}
     assert a['mcpServers'][SERVER_NAME]['command'] == b['mcp_servers'][SERVER_NAME]['command'] == str(runtime)
     assert b['mcp_servers'][SERVER_NAME]['tool_timeout_sec'] == 300
     assert a['mcpServers'][SERVER_NAME]['args'] == ['--desktop-serve']
-    assert original_toml in codex.read_text()
-    assert [Path(p).read_text() for p in result['backups']] == [original_json, original_toml]
-    assert all(Path(p).stat().st_mode & 0o077 == 0 for p in result['backups'])
+    assert original_toml in codex.read_text(encoding='utf-8')
+    assert [Path(p).read_text(encoding='utf-8') for p in result['backups']] == [original_json, original_toml]
+    from chemdraw_macos.private_files import is_private
+    assert all(is_private(p) for p in result['backups'])
     assert connect_clients(['claude', 'codex'], runtime, home=tmp_path)['backups'] == []
 
 
@@ -45,7 +46,7 @@ def test_registration_is_opt_in_and_all_configs_preflight_before_writing(tmp_pat
     runtime = tmp_path/'runtime'
     codex = tmp_path/'.codex/config.toml'
     codex.parent.mkdir()
-    codex.write_text(f'[mcp_servers.{SERVER_NAME}]\ncommand="someone-else"\n')
+    codex.write_text(f'[mcp_servers.{SERVER_NAME}]\ncommand="someone-else"\n',encoding='utf-8',newline='')
     before = codex.read_bytes()
     with pytest.raises(ValueError, match='already'):
         connect_clients(['claude', 'codex'], runtime, home=tmp_path)
@@ -69,11 +70,14 @@ def test_symlink_config_refused(tmp_path):
     codex = tmp_path/'.codex'
     codex.mkdir()
     original = tmp_path/'other.toml'
-    original.write_text('model="do not touch"')
-    (codex/'config.toml').symlink_to(original)
+    original.write_text('model="do not touch"',encoding='utf-8',newline='')
+    try:(codex/'config.toml').symlink_to(original)
+    except OSError as exc:
+        if getattr(exc,'winerror',None)==1314:pytest.skip('Creating a symlink needs Developer Mode or elevation on Windows')
+        raise
     with pytest.raises(ValueError, match='symbolic'):
         connect_clients(['codex'], tmp_path/'runtime', home=tmp_path)
-    assert original.read_text() == 'model="do not touch"'
+    assert original.read_text(encoding='utf-8') == 'model="do not touch"'
 
 
 def test_shared_app_install_is_stable_and_versioned_without_deleting_old(tmp_path):
@@ -83,7 +87,7 @@ def test_shared_app_install_is_stable_and_versioned_without_deleting_old(tmp_pat
     (source/'Contents/Resources/backend').mkdir(parents=True)
     (source/'Contents/Info.plist').write_bytes(plistlib.dumps({
         'CFBundleIdentifier': 'org.glebo309.chemdraw-mcp.setup', 'CFBundleVersion': '8'}))
-    (source/'Contents/Resources/backend/chemdraw-runtime').write_text('fixture')
+    (source/'Contents/Resources/backend/chemdraw-runtime').write_text('fixture',encoding='utf-8',newline='')
     installed = install_shared_app(source, home=tmp_path/'user')
     assert 'download' not in str(installed)
     assert installed.name == 'ChemDraw MCP.app'
@@ -103,16 +107,16 @@ def test_upgrade_switches_shared_and_terminal_launchers_without_duplicate_config
     for version in ('18', '20', '21'):
         (source/'Contents/Info.plist').write_bytes(plistlib.dumps({
             'CFBundleIdentifier': 'org.glebo309.chemdraw-mcp.setup', 'CFBundleVersion': version}))
-        backend.write_text('runtime ' + version)
+        backend.write_text('runtime ' + version,encoding='utf-8',newline='')
         result = install_and_connect(source, ['claude', 'codex'], home=home)
         app = Path(result['installed_app'])
-        assert (app/'Contents/Resources/backend/chemdraw-runtime').read_text() == 'runtime ' + version
+        assert (app/'Contents/Resources/backend/chemdraw-runtime').read_text(encoding='utf-8') == 'runtime ' + version
         for name in ('chemdraw-mcp', 'chemdraw-mac', 'chemdraw-mcp-macos'):
-            assert str(app) in (home/'Library/Application Support/ChemDraw MCP/bin'/name).read_text()
+            assert str(app) in (home/'Library/Application Support/ChemDraw MCP/bin'/name).read_text(encoding='utf-8')
         config = (home/'.codex/config.toml').read_bytes()
         if previous is not None: assert config == previous
         previous = config
-        assert (home/'.zshrc').read_text().count('# >>> ChemDraw MCP terminal access >>>') == 1
+        assert (home/'.zshrc').read_text(encoding='utf-8').count('# >>> ChemDraw MCP terminal access >>>') == 1
     assert (home/'Library/Application Support/ChemDraw MCP/versions/18/ChemDraw MCP.app').is_dir()
 
 
@@ -134,7 +138,7 @@ def test_existing_claude_bundle_is_not_registered_twice(tmp_path):
     from chemdraw_macos.client_install import connect_clients
     extension = tmp_path/'Library/Application Support/Claude/Claude Extensions/local.mcpb.glenn-bojanov.chemdraw-macos'
     extension.mkdir(parents=True)
-    (extension/'manifest.json').write_text(json.dumps({'name': 'chemdraw-macos'}))
+    (extension/'manifest.json').write_text(json.dumps({'name': 'chemdraw-macos'}),encoding='utf-8',newline='')
     result = connect_clients(['claude', 'codex'], tmp_path/'runtime', home=tmp_path)
     assert result['bundle_clients'] == ['claude']
     assert not (tmp_path/'Library/Application Support/Claude/claude_desktop_config.json').exists()
@@ -157,7 +161,7 @@ def test_bundle_server_hands_off_to_shared_runtime_after_setup(tmp_path, monkeyp
     app = tmp_path/'Library/Application Support/ChemDraw MCP/versions/8/ChemDraw MCP.app'
     runtime = app/'Contents/Resources/backend/chemdraw-runtime'
     runtime.parent.mkdir(parents=True)
-    runtime.write_text('fixture')
+    runtime.write_text('fixture',encoding='utf-8',newline='')
     monkeypatch.setattr(Path, 'home', lambda: tmp_path)
     monkeypatch.setattr(setup, 'read_settings', lambda: {'setup_complete': True, 'installed_app': str(app)})
     monkeypatch.setattr(sys, 'executable', str(tmp_path/'download/runtime'))

@@ -6,8 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from .core import document_row, validate_cdxml
-from .native_actions import ACTIONS
+from .core import ALL_EXPORT_FORMATS, document_row, validate_cdxml
+from .native_actions import ACTIONS, require_available
 from .native_lock import native_transaction
 
 
@@ -20,7 +20,7 @@ def _state(bridge, did):
 
 def _content(text):
     root = validate_cdxml(text)
-    for key in ('Name','CreationProgram','WindowPosition','WindowSize'):
+    for key in ('Name','CreationProgram','WindowPosition','WindowSize','WindowIsZoomed'):
         root.attrib.pop(key, None)
     def record(e):
         return (e.tag, sorted(e.attrib.items()), e.text if e.tag=='s' else (e.text or '').strip(),
@@ -34,15 +34,16 @@ def read_live_document(bridge, document_id):
     did = bridge._id(document_id)
     before = _state(bridge, did)
     snapshot = bridge._new_path('.cdxml', 'backups')
-    method='export'
+    method='export';transport=None
     from .core import Bridge
     if isinstance(bridge,Bridge):
         from .addin import get_backend
-        snapshot.write_text(get_backend(bridge).read(did)['cdxml'])
-        method='desktop_addin'
+        backend=get_backend(bridge)
+        snapshot.write_text(backend.read(did)['cdxml'],encoding='utf-8',newline='')
+        method='desktop_addin';transport=getattr(backend,'transport','desktop_addin')
     elif not before['document']['file']:
         from .shared import clipboard
-        snapshot.write_text(clipboard(bridge,did)['cdxml'])
+        snapshot.write_text(clipboard(bridge,did)['cdxml'],encoding='utf-8',newline='')
         method='clipboard'
     else:
         bridge.export(did, str(snapshot), 'cdxml')
@@ -52,10 +53,10 @@ def read_live_document(bridge, document_id):
             raise RuntimeError('Document binding changed while reading; no edit dispatched')
     if method in ('export','desktop_addin') and before['selection'] != after['selection']:
         raise RuntimeError('Selection changed while reading; no edit dispatched')
-    root, content = _content(snapshot.read_text())
+    root, content = _content(snapshot.read_text(encoding='utf-8'))
     if method in ('clipboard','desktop_addin'):
         from .shared import fingerprint
-        content=fingerprint(snapshot.read_text())
+        content=fingerprint(snapshot.read_text(encoding='utf-8'))
     binding = [did, after['document']['file'], content, after['selection']]
     token = hashlib.sha256(json.dumps(binding, ensure_ascii=False).encode()).hexdigest()
     objects = []
@@ -66,14 +67,15 @@ def read_live_document(bridge, document_id):
             objects.append(item)
     from .api_drawing import inspect_graphs
     return {**after, 'snapshot': str(snapshot), 'source_token': token, 'objects': objects,
-            'molecular_graphs':inspect_graphs(snapshot.read_text()),
-            'snapshot_method':method,'selection_changed':before['selection']!=after['selection'],
+            'molecular_graphs':inspect_graphs(snapshot.read_text(encoding='utf-8')),
+            'snapshot_method':method,'snapshot_transport':transport,'selection_changed':before['selection']!=after['selection'],
             'note': 'Fresh live graph, including unsaved edits. Molecular identity comes from molecular_graphs, never from captions, which may be stale. IDs belong to this snapshot.'}
 
 
 @native_transaction
 def live_action(bridge, document_id, action, expected_source_token, selection='current'):
     if action not in ACTIONS:raise ValueError('Unsupported native live action')
+    require_available(action)
     if selection not in ('current','all'):raise ValueError('Selection must be current or all')
     if not isinstance(expected_source_token,str) or len(expected_source_token)!=64:
         raise ValueError('Expected a source token from read_live_document')
@@ -107,7 +109,10 @@ def render_cdxml(bridge, cdxml, output_dir, background=True):
     result = bridge.create(cdxml, visible=not background)
     did = result['document']['document_id']
     artifacts = {}
+    available = getattr(bridge, 'export_formats', ALL_EXPORT_FORMATS)
+    unavailable = [fmt for fmt in ('cdxml','svg','png','pdf') if fmt not in available]
     for fmt in ('cdxml','svg','png','pdf'):
+        if fmt in unavailable:continue  # e.g. no PDF from Windows ChemDraw; reported below
         path = out / ('figure.' + fmt)
         bridge.export(did,str(path),fmt)
         artifacts[fmt] = str(path)
@@ -117,6 +122,7 @@ def render_cdxml(bridge, cdxml, output_dir, background=True):
     report = {'document': result['document'], 'artifacts': artifacts,
               'document_closed': background, 'recovery': closed,
               'background': background, 'chemical_preservation_verified': False,
+              **({'unavailable_formats': unavailable} if unavailable else {}),
               'note': 'Native export of supplied CDXML. No preview page. Background means a hidden window in a logged-in licensed desktop session, not display-free server support. Opening may briefly show a window.'}
-    (out/'result.json').write_text(json.dumps(report,indent=2)+'\n')
+    (out/'result.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8',newline='')
     return report

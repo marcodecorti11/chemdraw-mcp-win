@@ -67,19 +67,19 @@ def analyze_document(bridge, document_id):
     from .core import Bridge
     if isinstance(bridge,Bridge):
         from .addin import get_backend
-        snapshot.write_text(get_backend(bridge).read(document_id)['cdxml'])
+        snapshot.write_text(get_backend(bridge).read(document_id)['cdxml'],encoding='utf-8',newline='')
     elif document.get('file')=='':
         from .shared import clipboard
-        snapshot.write_text(clipboard(bridge,document_id)['cdxml'])
+        snapshot.write_text(clipboard(bridge,document_id)['cdxml'],encoding='utf-8',newline='')
     else:
         bridge.export(document_id,str(snapshot),'cdxml')
     from .editing import inspect_editable,source_token
-    try:editing=inspect_editable(snapshot.read_text())
+    try:editing=inspect_editable(snapshot.read_text(encoding='utf-8'))
     except (ValueError,RuntimeError,ImportError) as exc:editing={'unsupported':str(exc)}
     from .api_drawing import inspect_graphs
-    return {**analyze_cdxml(snapshot.read_text()), 'snapshot':str(snapshot),
-            'molecular_graphs':inspect_graphs(snapshot.read_text()),
-            'source_token':source_token(snapshot.read_text()),
+    return {**analyze_cdxml(snapshot.read_text(encoding='utf-8')), 'snapshot':str(snapshot),
+            'molecular_graphs':inspect_graphs(snapshot.read_text(encoding='utf-8')),
+            'source_token':source_token(snapshot.read_text(encoding='utf-8')),
             'editing':editing,
             'document':bridge.inspect(document_id)['document'],
             'note':'IDs belong to this live snapshot, including unsaved edits. Use molecular_graphs for identity; captions are not molecular identities.'}
@@ -92,13 +92,13 @@ def _file_hash(document):
 
 
 def _write_json(path,value):
-    path.write_text(json.dumps(value,indent=2,ensure_ascii=False)+'\n')
+    path.write_text(json.dumps(value,indent=2,ensure_ascii=False)+'\n',encoding='utf-8',newline='')
 
 
 def content_fingerprint(text):
     """Compare document content, excluding export name and window-only metadata."""
     root=supported_root(text)
-    for key in ('Name','CreationProgram','WindowPosition','WindowSize'):
+    for key in ('Name','CreationProgram','WindowPosition','WindowSize','WindowIsZoomed'):
         root.attrib.pop(key,None)
     def record(e):
         value=e.text if e.tag=='s' else (e.text or '').strip()
@@ -134,7 +134,7 @@ def polish_document(bridge, document_id, output_dir, preset='house', layout='pre
         out.mkdir()
         try:
             bridge.export(document_id,str(out/'before.cdxml'),'cdxml')
-            source=(out/'before.cdxml').read_text()
+            source=(out/'before.cdxml').read_text(encoding='utf-8')
             signature=chemical_signature(source)
             normalized,normalization=normalize_cdxml(source,preset)
             audit['normalization']=normalization
@@ -143,7 +143,7 @@ def polish_document(bridge, document_id, output_dir, preset='house', layout='pre
                 bridge.export(document_id,str(out/f'before.{fmt}'),fmt,pixels)
             result=bridge.create(normalized);nid=result['document']['document_id'];created.append(nid)
             measured=bridge._new_path('.cdxml')
-            bridge.export(nid,str(measured),'cdxml');native=measured.read_text()
+            bridge.export(nid,str(measured),'cdxml');native=measured.read_text(encoding='utf-8')
             if chemical_signature(native)!=signature:
                 raise ValueError('Native normalization changed chemistry; output rejected')
             if 'CrossingBonds=' in normalized or 'CrossingBonds=' in native:
@@ -162,7 +162,7 @@ def polish_document(bridge, document_id, output_dir, preset='house', layout='pre
                 result=bridge.create(arranged);nid=result['document']['document_id'];created.append(nid)
             for fmt in ('cdxml','svg','png'):
                 bridge.export(nid,str(out/f'figure.{fmt}'),fmt,pixels)
-            final_text=(out/'figure.cdxml').read_text()
+            final_text=(out/'figure.cdxml').read_text(encoding='utf-8')
             style_check=verify_custom_style(planned,final_text,preset)
             if style_check is not None:audit['custom_style_verification']=style_check
             if chemical_signature(final_text)!=signature:
@@ -179,7 +179,7 @@ def polish_document(bridge, document_id, output_dir, preset='house', layout='pre
             source_check=bridge._new_path('.cdxml','backups')
             bridge.export(document_id,str(source_check),'cdxml')
             if (after!=baseline or _file_hash(after)!=source_hash
-                    or content_fingerprint(source_check.read_text())!=content_fingerprint(source)):
+                    or content_fingerprint(source_check.read_text(encoding='utf-8'))!=content_fingerprint(source)):
                 raise RuntimeError('Source document state changed during processing; inspect source and backups')
             root=supported_root(final_text)
             visible=[e for e in root.find('page') if e.tag in ('fragment','t','arrow')]
@@ -199,7 +199,7 @@ def polish_document(bridge, document_id, output_dir, preset='house', layout='pre
 <style>body{{font:16px system-ui;margin:32px;color:#182326;background:#f2f4f5}}main{{display:grid;grid-template-columns:1fr 1fr;gap:24px}}figure{{margin:0;padding:24px;background:white;border:1px solid #ccd3d5;border-radius:12px}}img{{width:100%;height:380px;object-fit:contain}}a{{color:#17617c}}@media(max-width:800px){{main{{grid-template-columns:1fr}}}}</style>
 <h1>{title}</h1><p>Source preserved. Chemical graph checked after native export. Visual review remains required.</p>
 <main><figure><figcaption>Before</figcaption><img src="before.png" alt="Original figure"></figure><figure><figcaption>After</figcaption><img src="figure.png" alt="Polished figure"></figure></main>
-<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">Vector SVG</a> · <a href="figure.png">Transparent PNG</a> · <a href="audit.json">Audit</a> · <a href="recipe.json">Recipe</a></p></html>''')
+<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">Vector SVG</a> · <a href="figure.png">Transparent PNG</a> · <a href="audit.json">Audit</a> · <a href="recipe.json">Recipe</a></p></html>''',encoding='utf-8',newline='')
             for did in created[:-1]:bridge.close(did)
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit}
         except Exception as exc:

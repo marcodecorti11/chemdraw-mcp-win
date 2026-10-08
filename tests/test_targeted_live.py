@@ -53,6 +53,16 @@ async def test_targeted_edit_through_mcp(tmp_path,case):
                 untouched=[a for a in info['atoms'] if a['molecule_id']==byx[3]['id']]
                 operation={'kind':'native_align','action':'align_top'}
             selection=await call('chemdraw_prepare_selection',document_id=did,kind=kind,ids=ids,expected_source_token=info['source_token'])
+            if case=='align' and sys.platform=='win32':
+                # Native alignment is a submenu command Windows COM does not expose: refused before
+                # any copy or output is created (test_windows_capabilities).
+                refused=await session.call_tool('chemdraw_edit_targets',{'document_id':did,'output_dir':str(tmp_path/'result'),
+                                                                      'selection':selection,'operation':operation})
+                assert refused.isError and 'Windows COM' in refused.content[0].text,refused
+                assert not (tmp_path/'result').exists()
+                await call('chemdraw_close_working_document',document_id=did)
+                assert await call('chemdraw_list_documents')==baseline
+                return
             result=await call('chemdraw_edit_targets',document_id=did,output_dir=str(tmp_path/'result'),selection=selection,operation=operation)
             final=result['document']['document_id']
             try:

@@ -34,8 +34,11 @@ async def test_native_smiles_creation_through_mcp(tmp_path,aligned):
             baseline=await call('chemdraw_list_documents')
             final=None
             try:
-                result=await call('chemdraw_draw_structures',structures=records,output_dir=str(tmp_path/'draw'),columns=len(records),**options)
-                final=result['document']['document_id']
+                # Auto delivery is canvas-first with a compact audit; the per-structure audit and
+                # exported figure belong to the explicit background workflow, which closes its result.
+                result=await call('chemdraw_draw_structures',structures=records,output_dir=str(tmp_path/'draw'),columns=len(records),
+                                  presentation='background',**options)
+                if not result.get('document_closed'):final=result['document']['document_id']
                 assert result['audit']['status']=='checks_passed'
                 assert all(result['audit']['checks'].values())
                 assert [r['compound_id'] for r in result['audit']['structures']]==[r['compound_id'] for r in records]
@@ -57,7 +60,7 @@ async def test_native_ionic_drawing_preserves_charge_owners(tmp_path,mode):
     from chemdraw_macos.polish import chemical_signature
     from chemdraw_macos.draw import prepare_structures
     example='ions-circled.json' if mode=='circled' else 'molecules-circled.json'
-    manifest=json.loads((Path(__file__).parents[1]/'examples'/example).read_text())
+    manifest=json.loads((Path(__file__).parents[1]/'examples'/example).read_text(encoding='utf-8'))
     records=manifest['structures']
     params=StdioServerParameters(command=sys.executable,args=['-m','chemdraw_macos.server'],
                                 env=dict(os.environ,CHEMDRAW_MCP_WORKSPACE=str(tmp_path/'workspace')))
@@ -71,11 +74,11 @@ async def test_native_ionic_drawing_preserves_charge_owners(tmp_path,mode):
             baseline=await call('chemdraw_list_documents');final=None
             try:
                 result=await call('chemdraw_draw_structures',structures=records,output_dir=str(tmp_path/'ions'),
-                                  columns=2,charge_style=mode)
-                final=result['document']['document_id']
+                                  columns=2,charge_style=mode,presentation='background')
+                if not result.get('document_closed'):final=result['document']['document_id']
                 assert result['audit']['status']=='checks_passed'
                 assert all(result['audit']['checks'].values())
-                text=Path(result['artifacts']['cdxml']).read_text();root=ET.fromstring(text)
+                text=Path(result['artifacts']['cdxml']).read_text(encoding='utf-8');root=ET.fromstring(text)
                 assert chemical_signature(_core(text))==sorted(r['canonical_smiles'] for r in prepare_structures(records))
                 gs=root.findall('page/fragment/graphic')
                 assert len(gs)==(3 if mode=='circled' else 0)

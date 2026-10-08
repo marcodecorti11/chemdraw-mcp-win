@@ -1,5 +1,6 @@
 """Opt-in native complete-table pagination and physical export acceptance."""
 import json
+import sys
 import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -30,15 +31,22 @@ def test_native_same_document_pagination_and_physical_export(tmp_path):
         root=ET.parse(table['artifacts']['cdxml']).getroot()
         count=int(root.find('page').get('HeightPages'))
         assert count>1
-        output=export_figure(b,did,str(tmp_path/'exports'),600,include_pdf=True)
+        if sys.platform=='win32':
+            # Windows ChemDraw has no PDF export: refused before any output; pages still export.
+            with pytest.raises(ValueError,match='PDF export is not available'):
+                export_figure(b,did,str(tmp_path/'exports'),600,include_pdf=True)
+            assert not (tmp_path/'exports').exists()
+            output=export_figure(b,did,str(tmp_path/'exports'),600)
+        else:
+            output=export_figure(b,did,str(tmp_path/'exports'),600,include_pdf=True)
+            assert Path(output['artifacts']['pdf']).read_bytes().startswith(b'%PDF')
         assert len(output['pages'])==count and output['source_preserved']
-        assert Path(output['artifacts']['pdf']).read_bytes().startswith(b'%PDF')
         from PIL import Image
         for page in output['pages']:
             picture=Image.open(page['png'])
             assert picture.info['dpi']==pytest.approx((600,600),abs=.02)
             assert picture.mode=='RGBA'
         assert {d['document_id'] for d in b.documents()['documents']}=={did,*[d['document_id'] for d in baseline]}
-        (tmp_path/'native-acceptance.json').write_text(json.dumps({'table':table,'exports':output},indent=2))
+        (tmp_path/'native-acceptance.json').write_text(json.dumps({'table':table,'exports':output},indent=2),encoding='utf-8',newline='')
         b.close(did)
     finally:backend.close()

@@ -139,7 +139,7 @@ def _verify_delivery(result,plan,out):
             raise ValueError('Missing, empty or out-of-job '+fmt+' artifact')
     from .core import validate_cdxml
     from .polish import chemical_signature
-    root=validate_cdxml(Path(artifacts['cdxml']).read_text())
+    root=validate_cdxml(Path(artifacts['cdxml']).read_text(encoding='utf-8'))
     # The underlying workflow verifies decoration separately. This gate compares
     # molecule graphs again, independent of captions, frame and dividers.
     for page in root.findall('page'):
@@ -150,7 +150,7 @@ def _verify_delivery(result,plan,out):
     if chemical_signature(ET.tostring(root,encoding='unicode'))!=canonical:
         raise ValueError('Delivered native document does not match requested molecular graphs')
     from .placement import collision_pairs
-    collisions=collision_pairs(Path(artifacts['cdxml']).read_text(),measured=True)
+    collisions=collision_pairs(Path(artifacts['cdxml']).read_text(encoding='utf-8'),measured=True)
     if collisions:
         raise ValueError('Delivered placement collision candidates: '+repr(sorted(collisions)[:8]))
     return artifacts

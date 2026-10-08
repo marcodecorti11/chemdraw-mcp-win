@@ -22,8 +22,8 @@ def finish_scope(bridge, document_id, expected, arranged, decorated, decoration)
             raise NativeUncertain('Working scope changed; retained untouched, no finishing write sent')
         if bridge._run('active_document')!=did:
             raise NativeUncertain('Working scope is no longer active; retained untouched')
-        backup=bridge._new_path('.cdxml','backups');backup.write_text(initial['cdxml'])
-        planned=bridge._new_path('.cdxml','backups');planned.write_text(decorated)
+        backup=bridge._new_path('.cdxml','backups');backup.write_text(initial['cdxml'],encoding='utf-8',newline='')
+        planned=bridge._new_path('.cdxml','backups');planned.write_text(decorated,encoding='utf-8',newline='')
         try:
             # Native guards run again immediately before selection/clear. This
             # command is private, owned-only and never exposed as an MCP tool.
@@ -35,7 +35,7 @@ def finish_scope(bridge, document_id, expected, arranged, decorated, decoration)
             reply=backend.channel.request('append',expected=blank['cdxml'],cdxml=decorated)
             if reply.get('error'):raise ValueError(reply['error'])
             after=reply['cdxml']
-            snapshot=bridge._new_path('.cdxml','backups');snapshot.write_text(after)
+            snapshot=bridge._new_path('.cdxml','backups');snapshot.write_text(after,encoding='utf-8',newline='')
             if bridge._run('active_document')!=did:raise ValueError('Active document changed')
             verify_scope_decoration(arranged,after,decoration)
             row=next(d for d in bridge.documents()['documents'] if d['document_id']==did)

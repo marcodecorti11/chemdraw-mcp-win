@@ -87,7 +87,7 @@ def test_explicit_selection_calls_existing_annotation_copy_workflow(tmp_path):
 
 
 def test_selected_file_route_retains_original_selection_and_native_id_mapping(tmp_path):
-    path = tmp_path/'source.cdxml'; path.write_text(SAMPLE)
+    path = tmp_path/'source.cdxml'; path.write_text(SAMPLE,encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path/'work'); create = bridge.create
     def renumber(text):
         root = ET.fromstring(text)
@@ -104,11 +104,11 @@ def test_selected_file_route_retains_original_selection_and_native_id_mapping(tm
     assert selection['native_planned_arrow']['source']['id'] == str(int(SOURCE['id'])+1000)
     assert selection['native_curve_id'] in {c.get('id') for c in ET.parse(tmp_path/'out/figure.cdxml').findall('page/curve')}
     assert (tmp_path/'out/route-suggestions.json').is_file()
-    assert path.read_text() == SAMPLE and len(bridge.managed) == 1
+    assert path.read_text(encoding='utf-8') == SAMPLE and len(bridge.managed) == 1
 
 
 def test_selected_file_route_rejects_stale_before_native_creation(tmp_path):
-    path = tmp_path/'source.cdxml'; path.write_text(SAMPLE.replace('30 45','31 45'))
+    path = tmp_path/'source.cdxml'; path.write_text(SAMPLE.replace('30 45','31 45'),encoding='utf-8',newline='')
     bridge = BatchBridge(tmp_path/'work')
     report = suggest_routes(SAMPLE,SOURCE,TARGET)
     with pytest.raises(ValueError,match='stale'):

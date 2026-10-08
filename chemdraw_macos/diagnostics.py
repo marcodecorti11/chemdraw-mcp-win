@@ -6,6 +6,7 @@ import platform
 import plistlib
 import time
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -26,7 +27,13 @@ _LOADED_SOURCE_DIGEST=None if getattr(sys,'frozen',False) else _source_digest()
 
 
 def runtime_info():
-    if getattr(sys,'frozen',False):return {'mode':'packaged','restart_required':False}
+    if getattr(sys,'frozen',False):
+        result={'mode':'packaged','restart_required':False}
+        try:  # Windows candidates carry version.json beside the executable
+            info=json.loads((Path(sys.executable).resolve().parent/'version.json').read_text(encoding='utf-8'))
+            if info.get('product')=='chemdraw-mcp-windows':result['build']=str(info.get('version'))
+        except (OSError,ValueError):pass
+        return result
     return {'mode':'checkout','source_directory':str(Path(__file__).resolve().parent.parent),
             'loaded_source_digest':_LOADED_SOURCE_DIGEST,
             'restart_required':_source_digest()!=_LOADED_SOURCE_DIGEST}
@@ -60,6 +67,9 @@ def _desktop_api(bridge,documents,progress=None):
     progress = progress if progress is not None else {}
     progress['stage'] = 'addin_discovery'
     backend=getattr(bridge,'_desktop_addin',None)
+    if (backend is None or backend.closed) and platform.system()=='Windows':
+        # Windows reads through COM: no add-in package, port or credential to check.
+        backend=get_backend(bridge)
     if backend is None or backend.closed:
         base=Path.home()/'Library/Application Support/com.revvity.ChemDraw/Add-ins/ChemDraw MCP Native API'
         directory=installed_addin_directory(base)
@@ -111,13 +121,19 @@ def doctor(connect=True,*,bridge=None):
     result['coordination']={'mode':'per-user cooperative process lock','path':str(gate.path),'wait_seconds':gate.timeout,
                             'limits':'Does not coordinate manual GUI edits, older clients or other automation software.'}
     try:
-        if platform.system()!='Darwin':raise RuntimeError('Native automation requires macOS')
+        if platform.system() not in ('Darwin','Windows'):raise RuntimeError('Native automation requires macOS or Windows')
         app=app_location()
-        if not app.is_dir():raise RuntimeError(f'ChemDraw app not found: {app}')
-        plist=app/'Contents'/'Info.plist'
-        metadata=plistlib.loads(plist.read_bytes())
-        result.update(app=str(app),version=metadata.get('CFBundleShortVersionString','unknown'),
-                      sips_available=Path('/usr/bin/sips').is_file())
+        if platform.system()=='Windows':
+            from .windows_native import app_version
+            if not app.is_file():raise RuntimeError(f'ChemDraw.exe not found: {app}')
+            result.update(app=str(app),version=app_version(app),windows=platform.win32_ver()[1],
+                          transport='COM automation (ChemDraw_x64.Application)')
+        else:
+            if not app.is_dir():raise RuntimeError(f'ChemDraw app not found: {app}')
+            plist=app/'Contents'/'Info.plist'
+            metadata=plistlib.loads(plist.read_bytes())
+            result.update(app=str(app),version=metadata.get('CFBundleShortVersionString','unknown'),
+                          sips_available=Path('/usr/bin/sips').is_file())
         if connect:
             b=bridge if bridge is not None else Bridge(app_path=app)
             progress['stage'] = 'document_list'
@@ -134,7 +150,9 @@ def doctor(connect=True,*,bridge=None):
                           api['status'] if connect and api['status']!='responding' else
                           'local_ready' if dependencies else 'basic_only')
         if api.get('help'):result['help']=api['help']
-        result['compatibility']='Only ChemDraw 23.0.1 has been live-tested by this project; discovery is not verification of other versions.'
+        result['compatibility']=('Windows development port: live-tested only with ChemDraw Professional 26.1.0.6327 x64 on one '
+                                 'Windows 11 laptop; discovery is not verification of other versions.' if platform.system()=='Windows' else
+                                 'Only ChemDraw 23.0.1 has been live-tested by this project; discovery is not verification of other versions.')
     except NativeBusy as exc:
         result.update(status='busy',native_connection='not tested: busy',error=str(exc),
                       help='Another cooperating client holds the native session. Wait for that workflow to finish before trying again.')
@@ -147,7 +165,9 @@ def doctor(connect=True,*,bridge=None):
         if result['desktop_api']['status'] == 'checking':
             result['desktop_api'] = {'status':'failed','read_verified':False,'write_tested':False}
         result.update(status='unavailable',error=str(exc),
-                      help='Check CHEMDRAW_APP, licence activation and macOS Automation permission. No automatic retries or permission changes are made.')
+                      help=('Check that ChemDraw is installed, licensed and running without an open dialog. No automatic retries or permission changes are made.'
+                            if platform.system()=='Windows' else
+                            'Check CHEMDRAW_APP, licence activation and macOS Automation permission. No automatic retries or permission changes are made.'))
         if isinstance(exc, AddinReadError) and exc.code == 'no_open_document':
             result.update(status='needs_document',help='Open a blank ChemDraw document, then test again.')
             result['desktop_api'].update(status='needs_document',code=exc.code)

@@ -175,7 +175,7 @@ def annotation_inventory(text):
 @native_transaction
 def inspect_annotations_document(bridge,document_id):
     path=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(path),'cdxml')
-    return {**annotation_inventory(path.read_text()),'snapshot':str(path),'document':bridge.inspect(document_id)['document']}
+    return {**annotation_inventory(path.read_text(encoding='utf-8')),'snapshot':str(path),'document':bridge.inspect(document_id)['document']}
 
 
 def _vec(v,limit):
@@ -262,10 +262,10 @@ def annotate_document(bridge,document_id,output_dir,arrows,expected_source_token
     with getattr(bridge,'lock',nullcontext()):
         baseline=_native(bridge.inspect,document_id)['document'];disk_hash=_file_hash(baseline)
         snapshot=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(snapshot),'cdxml')
-        source=snapshot.read_text()
+        source=snapshot.read_text(encoding='utf-8')
         if source_token(source)!=expected_source_token:raise ValueError('Source snapshot is stale; inspect annotations again')
         planned,plan=plan_annotations(source,arrows,line_width)
-        out.mkdir();(out/'before.cdxml').write_text(source)
+        out.mkdir();(out/'before.cdxml').write_text(source,encoding='utf-8',newline='')
         _write_json(out/'recipe.json',{'schema_version':1,'arrows':arrows,'expected_source_token':expected_source_token,'line_width':line_width,'pixels':pixels})
         audit['plan']=plan;_write_json(out/'audit.json',audit)
         try:
@@ -275,10 +275,10 @@ def annotate_document(bridge,document_id,output_dir,arrows,expected_source_token
             # Render exports may trigger native normalization. Verify the saved
             # working document only after those exports have completed.
             for fmt in ('svg','png','cdxml'):_native(bridge.export,created,str(out/f'figure.{fmt}'),fmt,pixels)
-            final=(out/'figure.cdxml').read_text();verification=verify_annotations(planned,final)
+            final=(out/'figure.cdxml').read_text(encoding='utf-8');verification=verify_annotations(planned,final)
             audit['checks'].update(verification['checks']);audit['native_verification']=verification
             after=bridge._new_path('.cdxml','backups');_native(bridge.export,document_id,str(after),'cdxml')
-            if source_token(after.read_text())!=expected_source_token or _native(bridge.inspect,document_id)['document']!=baseline or _file_hash(baseline)!=disk_hash:
+            if source_token(after.read_text(encoding='utf-8'))!=expected_source_token or _native(bridge.inspect,document_id)['document']!=baseline or _file_hash(baseline)!=disk_hash:
                 raise ValueError('Source changed during annotation')
             audit['checks']['source_document_unchanged']=True;audit['status']='checks_passed'
             audit['limitations']='No chemical or radical-state edits. Own atom-label endpoint clearance only; whole-route, charge, caption and arrowhead clearance still require visual review. No native moving attachment guarantee.'
@@ -287,7 +287,7 @@ def annotate_document(bridge,document_id,output_dir,arrows,expected_source_token
 <style>body{font:16px system-ui;margin:32px;background:#f2f4f5}main{display:grid;grid-template-columns:1fr 1fr;gap:20px}figure{padding:20px;background:white;margin:0;border-radius:12px}img{width:100%;height:340px;object-fit:contain}a{color:#17617c}</style>
 <h1>Native electron-flow annotation</h1><p>Explicit displayed electron-source symbols or donating bonds; atom/bond targets. Chemistry retained. Visual review of the mechanism and curve clearance remains required.</p>
 <main><figure><figcaption>Before</figcaption><img src="before.png" alt="Source"></figure><figure><figcaption>After</figcaption><img src="figure.png" alt="Annotated copy"></figure></main>
-<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="recipe.json">Recipe</a> · <a href="audit.json">Audit</a></p></html>''')
+<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="recipe.json">Recipe</a> · <a href="audit.json">Audit</a></p></html>''',encoding='utf-8',newline='')
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),recovery='Operation not retried; inspect owned working document and backups before continuing')
@@ -314,7 +314,7 @@ def annotate_file(bridge,path,output_dir,arrows,expected_source_token=None,line_
     if expected_source_token is not None and source_token(source)!=expected_source_token:raise ValueError('File source snapshot is stale')
     result=_native(bridge.create,source);did=result['document']['document_id'];uncertain=False;completed=None
     try:
-        report=inspect_annotations_document(bridge,did);native=Path(report['snapshot']).read_text()
+        report=inspect_annotations_document(bridge,did);native=Path(report['snapshot']).read_text(encoding='utf-8')
         mapping=verify_annotations(source,native)['id_map']
         if hashlib.sha256(path.read_bytes()).hexdigest()!=file_hash:raise ValueError('Source file changed during import')
         mapped=copy.deepcopy(arrows)

@@ -9,7 +9,7 @@ from chemdraw_macos.complexes import plan_complex, verify_complex
 def test_shipped_chelate_is_black_by_default():
     import json
     from pathlib import Path
-    r=json.loads((Path(__file__).parents[1]/'examples/coordination-ruthenium-chelate.json').read_text())
+    r=json.loads((Path(__file__).parents[1]/'examples/coordination-ruthenium-chelate.json').read_text(encoding='utf-8'))
     assert all('color' not in a for a in r['atoms'])
     root=ET.fromstring(plan_complex(r)[0])
     assert all(n.get('color','0')=='0' for n in root.findall('.//n'))
@@ -79,7 +79,7 @@ def test_haptic_attachment_is_a_native_non_atom_node():
 def test_native_implicit_carbon_hydrogens_and_warnings_are_reported():
     import json
     from pathlib import Path
-    r=json.loads((Path(__file__).parents[1]/'examples/coordination-ruthenium-chelate.json').read_text())
+    r=json.loads((Path(__file__).parents[1]/'examples/coordination-ruthenium-chelate.json').read_text(encoding='utf-8'))
     text,plan=plan_complex(r); root=ET.fromstring(text)
     for a in r['atoms']:
         root.find(f".//n[@id='{plan['atom_ids'][a['id']]}']").set('NumHydrogens',str(a['hydrogens']))
@@ -110,7 +110,7 @@ def test_invalid_spatial_inputs_fail_closed(change):
 def test_native_haptic_crossing_order_is_preserved():
     import json
     from pathlib import Path
-    r=json.loads((Path(__file__).parents[1]/'examples/coordination-ferrocene.json').read_text())
+    r=json.loads((Path(__file__).parents[1]/'examples/coordination-ferrocene.json').read_text(encoding='utf-8'))
     text,plan=plan_complex(r); root=ET.fromstring(text)
     bond=root.find(f".//b[@B='{plan['atom_ids']['centre0']}']")
     bond.set('Z','999' if int(bond.get('Z'))<int(root.findall('.//b')[-1].get('Z')) else '-999')

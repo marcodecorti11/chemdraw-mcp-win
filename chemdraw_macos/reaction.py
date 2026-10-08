@@ -265,13 +265,13 @@ def build_reaction(bridge,reactants,products,output_dir,conditions_above='',cond
         _write_json(out/'audit.json',audit)
         try:
             for record in records:
-                key=record['compound_id'];seed=seeds/f'{key}.mol';seed.write_text(record['molblock'])
+                key=record['compound_id'];seed=seeds/f'{key}.mol';seed.write_text(record['molblock'],encoding='utf-8',newline='')
                 result=_native(bridge.import_file,str(seed));did=result['document']['document_id'];owned.append(did)
                 initial=seeds/f'{key}-imported.cdxml';_native(bridge.export,did,str(initial),'cdxml')
-                if chemical_signature(initial.read_text())!=[record['canonical_smiles']]:raise ValueError('Native MOL import changed requested identity')
+                if chemical_signature(initial.read_text(encoding='utf-8'))!=[record['canonical_smiles']]:raise ValueError('Native MOL import changed requested identity')
                 _native(bridge.clean,did)
                 target=seeds/f'{key}-clean.cdxml';_native(bridge.export,did,str(target),'cdxml')
-                text=target.read_text()
+                text=target.read_text(encoding='utf-8')
                 if chemical_signature(text)!=[record['canonical_smiles']]:raise ValueError('Native cleanup changed requested identity')
                 texts.append(text);_native(bridge.close,did);owned.remove(did)
             if scaffold_smiles is not None:
@@ -279,21 +279,21 @@ def build_reaction(bridge,reactants,products,output_dir,conditions_above='',cond
                 texts,alignment=align_native_structures([normalize_cdxml(t,preset)[0] for t in texts],scaffold_smiles)
                 audit['alignment']=alignment
             combined,recipe=compose_reaction(texts,reactants,products,conditions_above,conditions_below,preset)
-            (out/'combined.cdxml').write_text(combined)
+            (out/'combined.cdxml').write_text(combined,encoding='utf-8',newline='')
             result=_native(bridge.create,combined);did=result['document']['document_id'];owned.append(did)
-            snap=out/'combined-native.cdxml';_native(bridge.export,did,str(snap),'cdxml');native=snap.read_text()
+            snap=out/'combined-native.cdxml';_native(bridge.export,did,str(snap),'cdxml');native=snap.read_text(encoding='utf-8')
             _verify(combined,native);recipe=_remap(recipe,remap_ids(combined,native))
             from .styles import verify_custom_style
             verify_custom_style(combined,native,preset)
-            arranged,plan=arrange_reaction(native,recipe);(out/'planned.cdxml').write_text(arranged)
+            arranged,plan=arrange_reaction(native,recipe);(out/'planned.cdxml').write_text(arranged,encoding='utf-8',newline='')
             _write_json(out/'recipe.json',plan)
             result=_native(bridge.create,arranged);final_id=result['document']['document_id'];owned.append(final_id)
             for fmt in ('cdxml','svg','png'):_native(bridge.export,final_id,str(out/f'figure.{fmt}'),fmt,pixels)
-            final=(out/'figure.cdxml').read_text();verification=verify_reaction(arranged,final,plan)
+            final=(out/'figure.cdxml').read_text(encoding='utf-8');verification=verify_reaction(arranged,final,plan)
             style_check=verify_custom_style(arranged,final,preset)
             if style_check is not None:audit['custom_style_verification']=style_check
             stable=out/'post-export.cdxml';_native(bridge.export,final_id,str(stable),'cdxml')
-            if content_fingerprint(final)!=content_fingerprint(stable.read_text()):raise ValueError('Native working content changed during export')
+            if content_fingerprint(final)!=content_fingerprint(stable.read_text(encoding='utf-8')):raise ValueError('Native working content changed during export')
             _native(bridge.close,did);owned.remove(did)
             current=_native(bridge.documents)['documents']
             if [d for d in current if d['document_id']!=final_id]!=baseline['documents']:raise ValueError('Pre-existing document inventory changed')
@@ -303,7 +303,7 @@ def build_reaction(bridge,reactants,products,output_dir,conditions_above='',cond
             audit['checks'].update(verification['checks'],native_import_identity=True,native_cleanup_identity=True,
                                    working_content_unchanged=True,preexisting_documents_unchanged=True)
             _write_json(out/'audit.json',audit)
-            (out/'review.html').write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Native reaction</title><style>body{font:16px system-ui;margin:32px;background:#f2f4f5}figure{background:white;padding:24px}img{max-width:100%;max-height:80vh}</style><h1>Native ChemDraw reaction</h1><p>Explicit reactants, products and conditions. No predicted chemistry or experimental results. Visual review required.</p><figure><img src="figure.png" alt="Native reaction scheme"></figure><p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="audit.json">Audit</a> · <a href="request.json">Request</a></p></html>''')
+            (out/'review.html').write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Native reaction</title><style>body{font:16px system-ui;margin:32px;background:#f2f4f5}figure{background:white;padding:24px}img{max-width:100%;max-height:80vh}</style><h1>Native ChemDraw reaction</h1><p>Explicit reactants, products and conditions. No predicted chemistry or experimental results. Visual review required.</p><figure><img src="figure.png" alt="Native reaction scheme"></figure><p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="audit.json">Audit</a> · <a href="request.json">Request</a></p></html>''',encoding='utf-8',newline='')
             return {'document':result['document'],'output_dir':str(out),'review':str(out/'review.html'),'audit':audit}
         except NativeUncertain as exc:
             audit.update(status='uncertain',error=str(exc),owned_document_ids=owned,

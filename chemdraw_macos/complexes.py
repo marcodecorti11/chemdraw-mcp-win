@@ -335,13 +335,13 @@ def draw_complex(bridge, recipe, output_dir, preset='house', pixels=2400):
     with getattr(bridge,'lock',nullcontext()):
         baseline=_native(bridge.documents)
         content={d['document_id']:_document_content(bridge,d['document_id']) for d in baseline['documents']}
-        out.mkdir(); (out/'requested.cdxml').write_text(text)
+        out.mkdir(); (out/'requested.cdxml').write_text(text,encoding='utf-8',newline='')
         _write_json(out/'request.json',recipe); _write_json(out/'audit.json',audit)
         try:
             result=_native(bridge.create,text); did=result['document']['document_id']; owned.append(did)
             path=out/'figure.cdxml'; _native(bridge.export,did,str(path),'cdxml')
-            audit.update(verify_complex(text,path.read_text()))
-            verify_custom_style(text,path.read_text(),preset)
+            audit.update(verify_complex(text,path.read_text(encoding='utf-8')))
+            verify_custom_style(text,path.read_text(encoding='utf-8'),preset)
             for fmt in ('svg','png'): _native(bridge.export,did,str(out/f'figure.{fmt}'),fmt,pixels=pixels)
             if [d for d in _native(bridge.documents)['documents'] if d['document_id']!=did]!=baseline['documents']:
                 raise ValueError('Pre-existing document inventory changed')
@@ -349,7 +349,7 @@ def draw_complex(bridge, recipe, output_dir, preset='house', pixels=2400):
                 raise ValueError('Pre-existing document content changed')
             audit['checks']['preexisting_documents_unchanged']=True; audit['status']='checks_passed'
             _write_json(out/'audit.json',audit)
-            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Explicit coordination drawing</title><style>body{font:16px system-ui;background:#eee;margin:32px}img{background:white;max-width:100%;max-height:80vh}</style><h1>Explicit coordination drawing</h1><p>Caller-supplied geometry. Preservation checks are not chemical plausibility validation. Review required.</p><img src="figure.png" alt="Native coordination drawing"><p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="audit.json">Audit</a></p>')
+            (out/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Explicit coordination drawing</title><style>body{font:16px system-ui;background:#eee;margin:32px}img{background:white;max-width:100%;max-height:80vh}</style><h1>Explicit coordination drawing</h1><p>Caller-supplied geometry. Preservation checks are not chemical plausibility validation. Review required.</p><img src="figure.png" alt="Native coordination drawing"><p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="audit.json">Audit</a></p>',encoding='utf-8',newline='')
             return {'document':result['document'],'audit':audit,'review':str(out/'review.html'),
                     'artifacts':{fmt:str(out/f'figure.{fmt}') for fmt in ('cdxml','svg','png')}}
         except NativeUncertain as exc:

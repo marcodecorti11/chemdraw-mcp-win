@@ -1,4 +1,6 @@
 """Typed stdio MCP tools for native ChemDraw on macOS."""
+import os
+import sys
 from typing import Literal
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
@@ -71,7 +73,9 @@ INSTRUCTIONS = (
     'inside a logged-in desktop, not display-free operation. '
     'Native cleanup changes depiction; inspect its result. Core calls do not certify '
     'chemical identity or layout. No RDKit renderer is used. '
-)
+) + ('On Windows, ChemDraw is controlled through its COM automation instead of AppleScript and must be '
+     'started by the user. Windows ChemDraw automation offers no PDF export and no native alignment and distribution '
+     'commands; they are not available on this platform. ' if sys.platform == 'win32' else '')
 mcp=FastMCP('ChemDraw macOS',instructions=INSTRUCTIONS +
     'For NEW molecule drawings, panels and explicit reactions, start with chemdraw_draw. '
     'Its harness enforces validation, native rendering, layout and delivery checks. '
@@ -286,7 +290,7 @@ def chemdraw_build_ownership(document_id:int,owners:list[dict],curves:list[dict]
     """Snapshot a native document and build explicit sidecar ownership. Each owner {key,fragment_ids,caption_ids}; every fragment exactly once. Existing curves require curve_id and explicit source/target {kind,id}. Returns source-token-bound ownership; does not change manual dragging behavior."""
     from pathlib import Path
     snapshot=inspect_annotations_document(bridge(),document_id)
-    return build_ownership(Path(snapshot['snapshot']).read_text(),owners,curves)
+    return build_ownership(Path(snapshot['snapshot']).read_text(encoding='utf-8'),owners,curves)
 
 @mcp.tool(annotations=WRITE)
 def chemdraw_move_owned(document_id:int,output_dir:str,ownership:dict,moves:list[dict],expected_source_token:str,pixels:int=3200)->dict:
@@ -299,7 +303,7 @@ def chemdraw_suggest_routes(document_id:int,source:dict,target:dict,electrons:in
     from pathlib import Path
     from .route_suggestions import suggest_routes
     snapshot=inspect_annotations_document(bridge(),document_id)
-    return suggest_routes(Path(snapshot['snapshot']).read_text(),source,target,electrons,fishhook_side,line_width,clearance,max_candidates)
+    return suggest_routes(Path(snapshot['snapshot']).read_text(encoding='utf-8'),source,target,electrons,fishhook_side,line_width,clearance,max_candidates)
 
 @mcp.tool(annotations=WRITE)
 def chemdraw_apply_route(document_id:int,output_dir:str,report:dict,candidate_id:str,pixels:int=3200)->dict:
@@ -553,12 +557,32 @@ def get_server(profile: str = 'full') -> FastMCP:
     return core
 
 
+def isolate_stdio_pipe():
+    """Windows: read MCP input through a private duplicate; process stdin becomes NUL.
+
+    The stdio transport keeps a synchronous read pending on the stdin pipe. On Windows any
+    other use of that pipe (a DLL runtime querying standard input while numpy/RDKit load,
+    or a child process inheriting it) waits behind that read indefinitely. No-op elsewhere.
+    """
+    if sys.platform != 'win32':
+        return
+    import ctypes
+    import msvcrt
+    private = os.dup(sys.stdin.fileno())
+    nul = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(nul, 0)
+    os.close(nul)
+    ctypes.windll.kernel32.SetStdHandle(-10, msvcrt.get_osfhandle(0))  # STD_INPUT_HANDLE -> NUL
+    sys.stdin = open(private, 'r', encoding='utf-8', errors='replace', newline=None)
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(description='Native ChemDraw MCP server over stdio')
     parser.add_argument('--profile', choices=('core', 'full', 'drawing'), default='full',
                         help='core: direct native tools; full: core plus drawing workflows (default)')
     args = parser.parse_args(argv)
+    isolate_stdio_pipe()
     get_server(args.profile).run(transport='stdio')
 
 if __name__=='__main__':main()

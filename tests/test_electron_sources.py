@@ -7,7 +7,7 @@ from chemdraw_macos.annotations import plan_annotations
 from chemdraw_macos.route_suggestions import suggest_routes
 
 
-SOURCE = (Path(__file__).parents[1] / 'examples/sn2-annotation-input.cdxml').read_text()
+SOURCE = (Path(__file__).parents[1] / 'examples/sn2-annotation-input.cdxml').read_text(encoding='utf-8')
 
 
 @pytest.mark.parametrize('electrons', [1, 2])

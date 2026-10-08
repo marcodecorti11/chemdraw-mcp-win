@@ -9,6 +9,8 @@ import pytest
 from mcp import ClientSession,StdioServerParameters
 from mcp.client.stdio import stdio_client
 from test_annotations import SOURCE
+from native_helpers import importable_sn2
+SOURCE=importable_sn2(SOURCE)  # Windows ChemDraw 26.1: associated symbol positions (native_helpers)
 from chemdraw_macos.annotations import verify_annotations
 
 pytestmark=pytest.mark.skipif(os.environ.get('CHEMDRAW_LIVE_TEST')!='1',reason='Requires licensed running ChemDraw')
@@ -42,7 +44,7 @@ async def test_native_symbol_creation_and_sources_mcp(tmp_path,kind):
                 created=await call('chemdraw_create_document',cdxml=raw)
                 did=created['document']['document_id'];owned.append(did)
                 report=await call('chemdraw_inspect_symbols',document_id=did)
-                native=Path(report['snapshot']).read_text()
+                native=Path(report['snapshot']).read_text(encoding='utf-8')
                 mapping=verify_annotations(raw,native)['id_map']
                 if kind!='charge_arrow':
                     requests=[{'key':'br','kind':'charge' if kind=='positive_charge' else kind,'atom_id':mapping['1100']}]
@@ -54,7 +56,7 @@ async def test_native_symbol_creation_and_sources_mcp(tmp_path,kind):
                     assert all(result['audit']['checks'].values())
                     # Capture fresh ownership after symbol creation and native renumbering.
                     report=await call('chemdraw_inspect_symbols',document_id=did)
-                    native=Path(report['snapshot']).read_text()
+                    native=Path(report['snapshot']).read_text(encoding='utf-8')
                     from chemdraw_macos.symbols import _split
                     mapping=verify_annotations(_split(raw)[1],_split(native)[1])['id_map'] if kind not in ('charge','positive_charge') else None
                     print('SYMBOL_REVIEW='+result['review'])

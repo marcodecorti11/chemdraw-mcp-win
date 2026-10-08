@@ -89,7 +89,7 @@ async def test_frozen_real_mcp_initialize_discovery_and_offline_chemistry(tmp_pa
     # A test-only home suppresses GUI onboarding. No actual installation state changes.
     settings = tmp_path/'Library/Application Support/ChemDraw MCP/desktop-setup.json'
     settings.parent.mkdir(parents=True)
-    settings.write_text('{"setup_complete":true}')
+    settings.write_text('{"setup_complete":true}',encoding='utf-8',newline='')
     params = StdioServerParameters(command=RUNTIME, args=['--desktop-serve'],
         cwd=str(tmp_path), env={'HOME': str(tmp_path), 'PATH': '/usr/bin:/bin'})
     async with stdio_client(params) as (reader, writer):
@@ -118,9 +118,9 @@ async def test_shared_install_and_both_client_configs_launch_real_mcp(tmp_path):
     result = install_and_connect(Path(RUNTIME).resolve().parents[3], ['claude', 'codex'], home=tmp_path)
     # Isolated test home, no user client settings or installation are changed.
     settings = tmp_path/'Library/Application Support/ChemDraw MCP/desktop-setup.json'
-    settings.write_text(json.dumps({'setup_complete': True, 'installed_app': result['installed_app']}))
-    config = tomllib.loads((tmp_path/'.codex/config.toml').read_text())['mcp_servers'][SERVER_NAME]
-    claude = json.loads((tmp_path/'Library/Application Support/Claude/claude_desktop_config.json').read_text())
+    settings.write_text(json.dumps({'setup_complete': True, 'installed_app': result['installed_app']}),encoding='utf-8',newline='')
+    config = tomllib.loads((tmp_path/'.codex/config.toml').read_text(encoding='utf-8'))['mcp_servers'][SERVER_NAME]
+    claude = json.loads((tmp_path/'Library/Application Support/Claude/claude_desktop_config.json').read_text(encoding='utf-8'))
     assert claude['mcpServers'][SERVER_NAME]['command'] == config['command'] == result['command']
     if codex := shutil.which('codex'):
         checked = subprocess.run([codex, 'mcp', 'get', SERVER_NAME, '--json'],
@@ -141,7 +141,7 @@ async def test_shared_install_and_both_client_configs_launch_real_mcp(tmp_path):
 def test_frozen_native_svg_raster_worker_dispatch(tmp_path):
     svg = tmp_path/'fixture.svg'
     png = tmp_path/'fixture.png'
-    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><path d="M1 1L9 9" stroke="black"/></svg>')
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><path d="M1 1L9 9" stroke="black"/></svg>',encoding='utf-8',newline='')
     result = subprocess.run([RUNTIME, '-m', 'chemdraw_macos.raster', str(svg), str(png), '256'],
                             capture_output=True, text=True, cwd=tmp_path, timeout=30)
     assert result.returncode == 0, result.stderr
@@ -211,7 +211,7 @@ async def test_frozen_drawing_preview_and_upright_caffeine(tmp_path):
             assert all(result['checks'].values())
             image = Image.open(result['artifacts']['preview'])
             assert max(image.size) == 1200 and image.getpixel((0, 0)) == (255, 255, 255, 255)
-            mol = Chem.MolsFromCDXML(Path(result['artifacts']['cdxml']).read_text())[0]
+            mol = Chem.MolsFromCDXML(Path(result['artifacts']['cdxml']).read_text(encoding='utf-8'))[0]
             rings = mol.GetRingInfo().AtomRings()
             a, b = set(next(r for r in rings if len(r) == 6)) & set(next(r for r in rings if len(r) == 5))
             conf = mol.GetConformer()

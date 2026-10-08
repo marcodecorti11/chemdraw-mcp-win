@@ -293,14 +293,14 @@ def edit_file(bridge,path,output_dir,operations,captions,expected_source_token=N
     """Validate original CDXML before native import; remap explicit recipe IDs."""
     path=Path(path).expanduser().resolve(strict=True)
     if path.suffix.lower()!='.cdxml':raise ValueError('Edit file input requires CDXML')
-    source=path.read_text()
+    source=path.read_text(encoding='utf-8')
     if expected_source_token is not None and expected_source_token!=source_token(source):
         raise ValueError('File source snapshot is stale')
     plan_edit(source,operations,captions)
     imported=bridge.import_file(str(path));did=imported['document']['document_id']
     try:
         snap=bridge._new_path('.cdxml','backups');bridge.export(did,str(snap),'cdxml')
-        native=snap.read_text();mapping=verify_native_edit(source,native)['atom_id_map']
+        native=snap.read_text(encoding='utf-8');mapping=verify_native_edit(source,native)['atom_id_map']
         old=_root(source);new=_root(native)
         for b in old.findall('.//b'):
             hits=[c for c in new.findall('.//b') if {c.get('B'),c.get('E')}=={mapping[b.get('B')],mapping[b.get('E')]}]
@@ -326,24 +326,24 @@ def edit_document(bridge,document_id,output_dir,operations,captions,expected_sou
     with getattr(bridge,'lock',nullcontext()):
         baseline=bridge.inspect(document_id)['document'];file_hash=_file_hash(baseline)
         snap=bridge._new_path('.cdxml','backups');bridge.export(document_id,str(snap),'cdxml')
-        source=snap.read_text()
+        source=snap.read_text(encoding='utf-8')
         if source_token(source)!=expected_source_token:raise ValueError('Source snapshot is stale; inspect again before editing')
         planned,diff=plan_edit(source,operations,captions)
         out.mkdir()
         try:
-            (out/'before.cdxml').write_text(source)
+            (out/'before.cdxml').write_text(source,encoding='utf-8',newline='')
             _write_json(out/'recipe.json',{'schema_version':1,'operations':operations,'captions':captions,
                                          'expected_source_token':expected_source_token,'pixels':pixels})
             for fmt in ('svg','png'):bridge.export(document_id,str(out/f'before.{fmt}'),fmt,pixels)
             # Recheck immediately before creating the native working copy.
             check=bridge._new_path('.cdxml','backups');bridge.export(document_id,str(check),'cdxml')
-            if source_token(check.read_text())!=expected_source_token:raise ValueError('Source became stale before native creation')
+            if source_token(check.read_text(encoding='utf-8'))!=expected_source_token:raise ValueError('Source became stale before native creation')
             result=bridge.create(planned);created=result['document']['document_id']
             for fmt in ('cdxml','svg','png'):bridge.export(created,str(out/f'figure.{fmt}'),fmt,pixels)
-            verified=verify_native_edit(planned,(out/'figure.cdxml').read_text())
+            verified=verify_native_edit(planned,(out/'figure.cdxml').read_text(encoding='utf-8'))
             check=bridge._new_path('.cdxml','backups');bridge.export(document_id,str(check),'cdxml')
             if (bridge.inspect(document_id)['document']!=baseline or _file_hash(baseline)!=file_hash
-                    or source_token(check.read_text())!=expected_source_token):
+                    or source_token(check.read_text(encoding='utf-8'))!=expected_source_token):
                 raise RuntimeError('Source document changed during editing; inspect recovery snapshots')
             audit.update(status='checks_passed',chemical_diff=diff,native_verification=verified,
                          source_document=baseline,renderer='native ChemDraw',
@@ -356,7 +356,7 @@ def edit_document(bridge,document_id,output_dir,operations,captions,expected_sou
 <style>body{{font:16px system-ui;margin:32px;background:#f2f4f5;color:#182326}}main{{display:grid;grid-template-columns:1fr 1fr;gap:24px}}figure{{margin:0;padding:24px;background:white}}img{{width:100%;height:340px;object-fit:contain}}pre{{white-space:pre-wrap}}@media(max-width:700px){{main{{grid-template-columns:1fr}}}}</style>
 <h1>ChemDraw analogue review</h1><p>Source retained. Requested chemical changes and native atom coordinates verified. Visual review required.</p>
 <main><figure><figcaption>Original</figcaption><img src="before.png" alt="Original molecule"></figure><figure><figcaption>Edited copy</figcaption><img src="figure.png" alt="Edited molecule"></figure></main>
-<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="recipe.json">Recipe</a> · <a href="audit.json">Audit</a></p><h2>Explicit chemical diff</h2><pre>{changes}</pre></html>''')
+<p><a href="figure.cdxml">Editable ChemDraw</a> · <a href="figure.svg">SVG</a> · <a href="figure.png">PNG</a> · <a href="recipe.json">Recipe</a> · <a href="audit.json">Audit</a></p><h2>Explicit chemical diff</h2><pre>{changes}</pre></html>''',encoding='utf-8',newline='')
             return {'document':result['document'],'review':str(out/'review.html'),'output_dir':str(out),'audit':audit}
         except Exception as exc:
             audit.update(status='failed',error=str(exc));_write_json(out/'audit.json',audit)

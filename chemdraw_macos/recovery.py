@@ -5,7 +5,7 @@ from pathlib import Path
 
 def retained_job_failure(output_dir, error):
     out=Path(output_dir).expanduser();audit={}
-    try:audit=json.loads((out/'audit.json').read_text())
+    try:audit=json.loads((out/'audit.json').read_text(encoding='utf-8'))
     except (OSError,ValueError):pass
     artifacts={}
     for fmt in ('cdxml','svg','png'):

@@ -10,7 +10,7 @@ from chemdraw_macos.annotations import plan_annotations, verify_annotations, ann
 from chemdraw_macos.editing import source_token
 from test_batch import BatchBridge
 
-SOURCE=(Path(__file__).parents[1]/'examples/sn2-annotation-input.cdxml').read_text()
+SOURCE=(Path(__file__).parents[1]/'examples/sn2-annotation-input.cdxml').read_text(encoding='utf-8')
 ARROWS=[
     {'key':'attack','electrons':2,'source':{'kind':'symbol','id':'1500'},
      'target':{'kind':'atom','id':'2103','offset':[0,-14]},'controls':[[0,-33],[0,-28]]},
@@ -108,7 +108,7 @@ def test_uncertain_export_does_not_retry_or_close(tmp_path):
     b.export=fail
     with pytest.raises(RuntimeError):annotate_document(b,1,str(tmp_path/'out'),ARROWS,source_token(SOURCE))
     assert len(b.managed)==1 and not any(e[0]=='close' for e in b.events)
-    assert json.loads((tmp_path/'out'/'audit.json').read_text())['status']=='uncertain'
+    assert json.loads((tmp_path/'out'/'audit.json').read_text(encoding='utf-8'))['status']=='uncertain'
 
 
 def test_inventory_cli_and_mcp_callable(tmp_path,monkeypatch,capsys):
@@ -119,23 +119,23 @@ def test_inventory_cli_and_mcp_callable(tmp_path,monkeypatch,capsys):
     assert {'chemdraw_annotate_document','chemdraw_inspect_annotations'}<={t.name for t in asyncio.run(mcp.list_tools())}
     b=BatchBridge(tmp_path/'work');b.docs[1]=SOURCE
     monkeypatch.setattr(cli,'Bridge',lambda:b)
-    path=tmp_path/'recipe.json';path.write_text(json.dumps({'arrows':ARROWS,'expected_source_token':source_token(SOURCE)}))
+    path=tmp_path/'recipe.json';path.write_text(json.dumps({'arrows':ARROWS,'expected_source_token':source_token(SOURCE)}),encoding='utf-8',newline='')
     assert cli.main(['annotate','--document','1','--recipe',str(path),'--output',str(tmp_path/'out')])==0
     assert json.loads(capsys.readouterr().out)['audit']['checks']['curve_geometry_preserved']
 
 
 def test_file_annotation_rejects_existing_output_before_native_calls(tmp_path):
     from chemdraw_macos.annotations import annotate_file
-    path=tmp_path/'source.cdxml';path.write_text(SOURCE);b=BatchBridge(tmp_path/'work')
+    path=tmp_path/'source.cdxml';path.write_text(SOURCE,encoding='utf-8',newline='');b=BatchBridge(tmp_path/'work')
     with pytest.raises(FileExistsError):annotate_file(b,path,str(tmp_path),ARROWS)
     assert not b.events
 
 
 def test_file_source_mutation_during_import_is_rejected(tmp_path):
     from chemdraw_macos.annotations import annotate_file
-    path=tmp_path/'source.cdxml';path.write_text(SOURCE);b=BatchBridge(tmp_path/'work');create=b.create
+    path=tmp_path/'source.cdxml';path.write_text(SOURCE,encoding='utf-8',newline='');b=BatchBridge(tmp_path/'work');create=b.create
     def change(text):
-        path.write_text(SOURCE+'\n')
+        path.write_text(SOURCE+'\n',encoding='utf-8',newline='')
         return create(text)
     b.create=change
     with pytest.raises(ValueError,match='Source file changed'):annotate_file(b,path,str(tmp_path/'out'),ARROWS)
