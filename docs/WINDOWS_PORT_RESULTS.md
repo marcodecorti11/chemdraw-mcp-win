@@ -132,6 +132,6 @@ Next action: Mac regression and a second-machine install of `builds/0.10.0rc22-w
 
 ## Addendum, 2026-10-08
 
-- Candidate 0.10.0rc22-win.5 replaces win.4: the setup window's sprite animation no longer freezes when Windows "Animation effects" is off (only CHEMDRAW_MCP_REDUCE_MOTION=1 freezes it). Unit suite on this tree: 1416 passed, 126 skipped, 0 failed. Native install/update and setup-flow checks were last run on win.4; the win.5 re-run is pending because ChemDraw was not running.
+- Candidate 0.10.0rc22-win.5 replaces win.4: the setup window's sprite animation no longer freezes when Windows "Animation effects" is off (only CHEMDRAW_MCP_REDUCE_MOTION=1 freezes it). Unit suite on this tree: 1416 passed, 126 skipped, 0 failed. The native install/update (20/20), setup-flow (9/9) and scripted-client (19/19) checks were re-run on win.5 on 2026-10-08 with ChemDraw open and the pre-existing drawing unchanged (same laptop only).
 - The win.x zip is not part of this repository. Build it on Windows with `python scripts/build_windows.py <new dir> --version <v> --uv <uv.exe>`.
 - Not tested on a second machine; not tested on macOS.
