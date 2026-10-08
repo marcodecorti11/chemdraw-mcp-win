@@ -1,10 +1,10 @@
-# ChemDraw MCP for Windows (experimental port)
+# ChemDraw MCP for Windows
 
 Native, editable chemical drawings from your assistant or terminal, now on Windows.
 Read your unsaved ChemDraw edits, build aligned molecule tables in the same
 document, and export figures at a consistent chemical scale.
 
-**[Download the Windows installer (x64, review candidate win.5)](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)** ·
+**[Download for Windows (x64)](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)** ·
 [Test results and known gaps](docs/WINDOWS_PORT_RESULTS.md) ·
 [Examples and customization](docs/GETTING_STARTED.md) ·
 [Architecture](docs/ARCHITECTURE.md)
@@ -49,7 +49,7 @@ stays installed beside the new one, and no duplicate entry is added.
 
 ## Status of the Windows port
 
-Experimental review candidate. Tested on one Windows 11 laptop with ChemDraw 26.1:
+Tested on one Windows 11 laptop with ChemDraw 26.1:
 unit suite 1416 passed, 0 failed; native tests against ChemDraw 78 passed and 2 failed (both
 explained); a clean install, an update, the setup flow and a scripted assistant session passed.
 Not yet tested on a second machine or with a real Claude Desktop or Codex restart.
