@@ -1,80 +1,80 @@
-# ChemDraw MCP for macOS
+# ChemDraw MCP for Windows (experimental port)
 
-Native, editable chemical drawings from your assistant or terminal.
+Native, editable chemical drawings from your assistant or terminal, now on Windows.
 Read your unsaved ChemDraw edits, build aligned molecule tables in the same
 document, and export figures at a consistent chemical scale.
 
-> **Windows (experimental, this branch):**
-> **[Download the Windows installer (x64, review candidate win.5)](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)** ·
-> [Windows test results and known gaps](docs/WINDOWS_PORT_RESULTS.md)
->
-> Needs Windows x64 and a licensed ChemDraw (developed with ChemDraw Professional 26.1).
-> Download `ChemDraw-MCP-Windows-x64-0.10.0rc22-win.5.zip` from the release, extract it on a local
-> disk and run `ChemDraw MCP Setup.exe`. Start ChemDraw and open a drawing before pressing
-> Test connection. The files are not code-signed, so SmartScreen may warn. Tested on one machine
-> only; PDF export and align/distribute are not available on Windows. The macOS instructions below
-> are unchanged and do not apply to Windows.
-
-**[Download for Mac (Apple Silicon)](https://github.com/glebo309/chemdraw-mcp-macos/releases/download/v0.10.0rc22/ChemDraw-MCP-Apple-Silicon.dmg)** ·
-[Release notes](https://github.com/glebo309/chemdraw-mcp-macos/releases/tag/v0.10.0rc22) ·
-[Terminal installation](docs/TERMINAL_INSTALL.md) ·
+**[Download the Windows installer (x64, review candidate win.5)](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)** ·
+[Test results and known gaps](docs/WINDOWS_PORT_RESULTS.md) ·
 [Examples and customization](docs/GETTING_STARTED.md) ·
 [Architecture](docs/ARCHITECTURE.md)
 
-![ChemDraw MCP graphical setup with molecular animation and pink, lavender and gold accents](assets/readme/setup.png)
+> **Looking for macOS?** This repository is the Windows port. The original macOS
+> project, with the Mac installer, is
+> [glebo309/chemdraw-mcp-macos](https://github.com/glebo309/chemdraw-mcp-macos)
+> by Glenn Bojanov.
 
-## Install once
+![ChemDraw MCP setup on Windows with the molecular animation](assets/readme/windows-setup.png)
 
-| Route | Start here |
-| --- | --- |
-| **Graphical Mac installer** | [Download the Apple Silicon DMG](https://github.com/glebo309/chemdraw-mcp-macos/releases/download/v0.10.0rc22/ChemDraw-MCP-Apple-Silicon.dmg), open **ChemDraw MCP**, and choose your installed ChemDraw app and local assistants. **Start Here.html** beside the app shows the macOS opening steps with a numbered screenshot. Python and dependencies are included. |
-| **Terminal / Git** | Clone this repository and run `./install.sh`. It installs locked dependencies and automatically launches the animated terminal setup. Requires Git and uv. [Commands](docs/TERMINAL_INSTALL.md) |
-| **MCP bundle** | The `.mcpb` is an alternative for clients that import MCP bundles. Choose this or the DMG, not both. |
+## Install on Windows
 
-All routes use the same native bridge. You do not need a separate installation
-for each model. Other local stdio MCP clients can use the server executable;
-each client's permissions and tool behavior still need testing. The graphical
-helper offers Claude Desktop and Codex local-client configuration. It does not
-install a remote connector into web ChatGPT.
+You need 64-bit Windows and your own licensed ChemDraw. Testing used Windows 11 and
+ChemDraw Professional 26.1; Windows 10 and other ChemDraw versions are untested.
 
-### Terminal quick start
+1. Open the [release page](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)
+   and download `ChemDraw-MCP-Windows-x64-0.10.0rc22-win.5.zip`. Optionally compare it with
+   `SHA256SUMS` (PowerShell: `Get-FileHash -Algorithm SHA256 <zip>`).
+2. Extract the zip on a local disk (not a network share) and run **ChemDraw MCP Setup.exe**
+   inside the `ChemDraw MCP` folder.
+3. Choose the assistants to connect (Claude Desktop, Codex, either or none).
+4. Start ChemDraw yourself and open any drawing (File > New is fine), then press
+   **Test connection**, then **Finish**. Restart your assistant afterwards.
 
-```sh
-git clone https://github.com/glebo309/chemdraw-mcp-macos.git
-cd chemdraw-mcp-macos
-./install.sh
-```
+The files are not code-signed, so Windows SmartScreen may warn the first time.
+Python and all dependencies are included; nothing else needs to be installed.
 
-Setup starts automatically after dependency installation. To connect assistants,
-use `./install.sh --client claude --client codex` instead. A Git clone alone does
-not execute anything. Checkout commands use `uv run`; no global shell command or
-PATH change is assumed. For an optional first drawing after setup:
+Setup changes only your own user account: it copies the program to
+`%LOCALAPPDATA%\ChemDraw MCP`, adds its `bin` folder to your user PATH once, and adds one
+`glecko_chemdraw` entry per selected assistant, keeping your other settings and a backup of
+each edited configuration. The MCP server never starts or closes ChemDraw itself.
 
-```sh
-uv run --locked --extra chemistry chemdraw-mac first-run
-```
+After setup, a new terminal also has the command line: `chemdraw-mac doctor` checks the
+installation, `chemdraw-mac --help` lists the commands.
 
-Prefer no terminal? [Download the Mac DMG](https://github.com/glebo309/chemdraw-mcp-macos/releases/download/v0.10.0rc22/ChemDraw-MCP-Apple-Silicon.dmg),
-open it, and open **ChemDraw MCP**. The graphical helper includes Python and
-dependencies, guides the ChemDraw add-in step, and connects selected local clients.
-It does not install or license ChemDraw itself.
+**Updating:** run the newer release's setup. Assistant settings are kept, the previous version
+stays installed beside the new one, and no duplicate entry is added.
 
-The graphical install also includes terminal access. After Finish, open a new
-macOS zsh Terminal window and run `chemdraw-mac --help` or `chemdraw-mac first-run`.
-No second download, Python or uv installation is needed. Setup preserves and
-backs up existing shell settings before adding its PATH entry.
+**Problems:** setup saves a diagnostics file automatically under
+`%LOCALAPPDATA%\ChemDraw MCP\Logs`. Please attach it when you report an issue.
 
-**Updating? No uninstall needed.** Quit connected assistants and ChemDraw after
-saving your work, run the new DMG's setup, test, and finish. The existing add-in
-is refreshed in place. Setup automatically saves diagnostics on your Mac.
-[Update instructions](docs/UPDATES.md).
+## Status of the Windows port
 
-**Experimental candidate: 0.10.0rc22.** Requires your own licensed ChemDraw and a
-logged-in Mac desktop. Native tests have run on Apple Silicon, macOS 15.6,
-ChemDraw 23.0.1.11. The Mac app is ad-hoc signed, not Developer ID signed or
-notarized. Independent-Mac acceptance is still open. Only one assistant can own
-the native connection at a time. [Compatibility](docs/COMPATIBILITY.md) ·
-[Graphical setup](docs/DESKTOP_INSTALLER.md) · [Updates](docs/UPDATES.md)
+Experimental review candidate. Tested on one Windows 11 laptop with ChemDraw 26.1:
+unit suite 1416 passed, 0 failed; native tests against ChemDraw 78 passed and 2 failed (both
+explained); a clean install, an update, the setup flow and a scripted assistant session passed.
+Not yet tested on a second machine or with a real Claude Desktop or Codex restart.
+
+Not available on Windows, because ChemDraw's Windows automation does not offer them:
+PDF export and the align/distribute commands. Other remaining gaps are listed in
+[Windows test results and known gaps](docs/WINDOWS_PORT_RESULTS.md).
+
+Build the installer from source on 64-bit Windows with
+`python scripts/build_windows.py <new folder> --version <version> --uv <path to uv.exe>`.
+
+## Credit and license
+
+This is a fork of Glenn Bojanov's [ChemDraw MCP for macOS](https://github.com/glebo309/chemdraw-mcp-macos),
+ported to Windows ChemDraw (COM automation). The chemistry, layout and drawing engine are his;
+the Windows bridge and installer were added here. Licensed like the original under
+[GNU AGPL version 3 only](LICENSE); see [NOTICE](NOTICE) and
+[third-party notices](THIRD_PARTY_NOTICES.md). ChemDraw is proprietary software of its vendor;
+this project is not affiliated with or endorsed by it.
+
+---
+
+*The sections below come from the original project and describe the shared drawing engine.
+Mac-only details in them (`install.sh`, `.app` paths, AppleScript, macOS permissions) do not
+apply on Windows.*
 
 ## Ask for the result
 
