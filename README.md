@@ -4,6 +4,17 @@ Native, editable chemical drawings from your assistant or terminal.
 Read your unsaved ChemDraw edits, build aligned molecule tables in the same
 document, and export figures at a consistent chemical scale.
 
+> **Windows (experimental, this branch):**
+> **[Download the Windows installer (x64, review candidate win.5)](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)** ·
+> [Windows test results and known gaps](docs/WINDOWS_PORT_RESULTS.md)
+>
+> Needs Windows x64 and a licensed ChemDraw (developed with ChemDraw Professional 26.1).
+> Download `ChemDraw-MCP-Windows-x64-0.10.0rc22-win.5.zip` from the release, extract it on a local
+> disk and run `ChemDraw MCP Setup.exe`. Start ChemDraw and open a drawing before pressing
+> Test connection. The files are not code-signed, so SmartScreen may warn. Tested on one machine
+> only; PDF export and align/distribute are not available on Windows. The macOS instructions below
+> are unchanged and do not apply to Windows.
+
 **[Download for Mac (Apple Silicon)](https://github.com/glebo309/chemdraw-mcp-macos/releases/download/v0.10.0rc22/ChemDraw-MCP-Apple-Silicon.dmg)** ·
 [Release notes](https://github.com/glebo309/chemdraw-mcp-macos/releases/tag/v0.10.0rc22) ·
 [Terminal installation](docs/TERMINAL_INSTALL.md) ·
