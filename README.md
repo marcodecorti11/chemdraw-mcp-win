@@ -4,7 +4,7 @@ Native, editable chemical drawings from your assistant or terminal, now on Windo
 Read your unsaved ChemDraw edits, build aligned molecule tables in the same
 document, and export figures at a consistent chemical scale.
 
-**[Download for Windows (x64)](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)** ·
+**[Download for Windows (x64)](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.6)** ·
 [Test results and known gaps](docs/WINDOWS_PORT_RESULTS.md) ·
 [Examples and customization](docs/GETTING_STARTED.md) ·
 [Architecture](docs/ARCHITECTURE.md)
@@ -21,14 +21,16 @@ document, and export figures at a consistent chemical scale.
 You need 64-bit Windows and your own licensed ChemDraw. Testing used Windows 11 and
 ChemDraw Professional 26.1; Windows 10 and other ChemDraw versions are untested.
 
-1. Open the [release page](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.5)
-   and download `ChemDraw-MCP-Windows-x64-0.10.0rc22-win.5.zip`. Optionally compare it with
+1. Open the [release page](https://github.com/marcodecorti11/chemdraw-mcp-win/releases/tag/v0.10.0rc22-win.6)
+   and download `ChemDraw-MCP-Windows-x64-0.10.0rc22-win.6.zip`. Optionally compare it with
    `SHA256SUMS` (PowerShell: `Get-FileHash -Algorithm SHA256 <zip>`).
 2. Extract the zip on a local disk (not a network share) and run **ChemDraw MCP Setup.exe**
    inside the `ChemDraw MCP` folder.
-3. Choose the assistants to connect (Claude Desktop, Codex, either or none).
+3. Choose the assistants to connect: Claude Desktop, Claude Code (terminal), Codex (app and CLI),
+   Gemini CLI, any combination, or none.
 4. Start ChemDraw yourself and open any drawing (File > New is fine), then press
-   **Test connection**, then **Finish**. Restart your assistant afterwards.
+   **Test connection**, then **Finish**. Restart the connected apps, or start a new session in a
+   terminal assistant.
 
 The files are not code-signed, so Windows SmartScreen may warn the first time.
 Python and all dependencies are included; nothing else needs to be installed.
@@ -41,6 +43,13 @@ each edited configuration. The MCP server never starts or closes ChemDraw itself
 After setup, a new terminal also has the command line: `chemdraw-mac doctor` checks the
 installation, `chemdraw-mac --help` lists the commands.
 
+**Terminal assistants.** Claude Code is connected through its own `claude mcp add` command (user
+scope); if `claude` is not on PATH, setup shows the exact command to run later. Codex CLI shares the
+Codex settings, and Gemini CLI gets an entry in `~/.gemini/settings.json`. Any other MCP-capable tool
+can use the same local (stdio) server:
+`"%LOCALAPPDATA%\ChemDraw MCP\current\chemdraw-runtime.exe" --desktop-serve`. Only one assistant
+can drive ChemDraw at a time.
+
 **Updating:** run the newer release's setup. Assistant settings are kept, the previous version
 stays installed beside the new one, and no duplicate entry is added.
 
@@ -50,7 +59,7 @@ stays installed beside the new one, and no duplicate entry is added.
 ## Status of the Windows port
 
 Tested on one Windows 11 laptop with ChemDraw 26.1:
-unit suite 1416 passed, 0 failed; native tests against ChemDraw 78 passed and 2 failed (both
+unit suite 1424 passed, 0 failed; native tests against ChemDraw 78 passed and 2 failed (both
 explained); a clean install, an update, the setup flow and a scripted assistant session passed.
 Not yet tested on a second machine or with a real Claude Desktop or Codex restart.
 
