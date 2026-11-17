@@ -282,3 +282,18 @@ def verify_custom_style(expected, native, preset):
     return {'verified':True,'scope':'supported numerical settings, font families, sizes and bold/italic faces',
             'numerical_tolerances':tolerances,'chemical_script_bits':'not independently verified',
             'glyphs_and_font_rendering':'visual review required'}
+
+
+def stationery_styles(app_path) -> list[dict]:
+    """ChemDraw's bundled journal and document stationery (.cds), for import_style."""
+    app_path = Path(app_path)
+    folder = app_path/'Contents/Resources/SpecialPurpose/Stationery'
+    if folder.is_dir():
+        return [{'name': p.stem, 'path': str(p)} for p in sorted(folder.glob('*.cds'))]
+    if app_path.suffix.lower() == '.exe':
+        # Windows (unverified location): stationery ships in a folder near ChemDraw.exe.
+        found = []
+        for pattern in ('*.cds', '*/*.cds', '*/*/*.cds'):
+            found.extend(app_path.parent.glob(pattern))
+        return [{'name': p.stem, 'path': str(p)} for p in sorted(set(found), key=lambda p: (p.stem, str(p)))]
+    return []
